@@ -4,7 +4,9 @@
  */
 import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
-import { basename, extname } from 'node:path';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, extname, join } from 'node:path';
 import { app, dialog, ipcMain, nativeTheme, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { ENGINE_VERSION } from '@domain/version';
 import {
@@ -21,20 +23,20 @@ import {
   type MappingPreview,
   type PickedFile,
   type ProjectState,
-  type ProjectSummary,
   type RequestOf,
   type ResponseOf,
   type RowView
 } from '@shared/contracts';
-import type { ImportResult, NormalisedRow } from '../import/types';
+import type { ImportConfig, ImportResult, NormalisedRow } from '../import/types';
 import { ImportError } from '../import/types';
 import { runImportJob, cancelImportJob } from './importService';
 import { importSession } from './session';
-import { projectStore, PROJECT_SCHEMA_VERSION } from './projectStore';
-import { readRecentProjects } from './recent';
+import { projectStore } from './projectStore';
+import { ProjectRepository, StorageError } from '../storage';
+import { readRecentProjects, addRecentProject } from './recent';
 
 function failureFrom(err: unknown): { ok: false; error: ErrorInfo } {
-  if (err instanceof ImportError) return { ok: false, error: { code: err.code, message: err.message } };
+  if (err instanceof ImportError || err instanceof StorageError) return { ok: false, error: { code: err.code, message: err.message } };
   const message = err instanceof Error ? err.message : 'An unexpected error occurred';
   return { ok: false, error: { code: 'UNEXPECTED', message } };
 }
@@ -132,6 +134,67 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     return path ? { path } : null;
   });
 
+  // Test/e2e helper: create a fresh temp project and import the bundled golden
+  // CSV samples into it, so the e2e can drive a full reconcile/review flow without
+  // native dialogs. Reuses the exact same create + import + persist path as production.
+  handle(IPC_CHANNELS.appOpenSample, async () => {
+    try {
+      const samplesDir = join(app.getAppPath(), 'samples');
+      const projectPath = join(mkdtempSync(join(tmpdir(), 'statementdesk-sample-')), `golden${PROJECT_FILE_EXTENSION}`);
+      const repo = ProjectRepository.create(projectPath, {
+        projectName: 'Golden sample',
+        supplierName: 'Supplier One',
+        supplierId: 'SUP001',
+        cutoffDate: '2026-09-30',
+        currency: 'AUD',
+        comparableBalancesConfirmed: true
+      });
+      projectStore.set(repo);
+      importSession.bindProject(repo.projectId);
+
+      const mapping = { reference: 1, documentType: 2, documentDate: 3, outstanding: 4, supplier: 0, currency: -1, asOfDate: -1 };
+      const sides: { side: 'statement' | 'ledger'; file: string; dateFormat: 'DD/MM/YYYY' | 'YYYY-MM-DD' }[] = [
+        { side: 'statement', file: 'statement_SUP001_2026-09-30.csv', dateFormat: 'DD/MM/YYYY' },
+        { side: 'ledger', file: 'ap_ledger_SUP001_2026-09-30.csv', dateFormat: 'YYYY-MM-DD' }
+      ];
+      for (const s of sides) {
+        const config: ImportConfig = {
+          side: s.side,
+          path: join(samplesDir, s.file),
+          kind: 'csv',
+          sheetName: null,
+          headerRow: 1,
+          dataStartRow: 2,
+          dataEndRow: null,
+          excludedRows: [],
+          mapping,
+          scope: { projectId: repo.projectId, sourceId: `src-${s.side}`, supplierId: 'SUP001', currency: 'AUD', cutoffDate: '2026-09-30' },
+          options: { signMode: 'signed_amount', dateFormat: s.dateFormat, decimalSeparator: '.', allowParentheses: true, mappingVersion: 1 },
+          controlTotalText: null
+        };
+        const result = await runImportJob<ImportResult>(`sample:${randomUUID()}`, { op: 'run', payload: { config } });
+        importSession.set(s.side, config, result);
+        repo.saveImport({
+          config,
+          fileName: result.fileName,
+          kind: result.kind,
+          sha256: result.sha256,
+          sizeBytes: result.sizeBytes,
+          sheetName: result.sheetName,
+          importedCents: result.control.importedCents,
+          controlCents: result.control.controlCents,
+          controlStatus: result.control.status,
+          counts: result.counts,
+          canonicalRows: result.canonicalRows
+        });
+      }
+      await addRecentProject(projectPath);
+      return { ok: true as const, value: repo.getProject() };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
   handle(IPC_CHANNELS.dialogPickInputFile, async (request) => {
     const owner = ctx.getWindow();
     const title = request.title ?? (request.side === 'statement' ? 'Choose supplier statement' : 'Choose AP ledger export');
@@ -189,28 +252,30 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     return result.canceled || !result.filePath ? null : { path: result.filePath };
   });
 
-  // Phase 3 keeps the open project in memory so the Setup -> Import -> Validation
-  // flow works end to end. Phase 4 backs project.create/open with the SQLite
-  // repository (writing/reading the .statementdesk file at `path`).
-  handle(IPC_CHANNELS.projectCreate, (request) => {
-    const now = new Date().toISOString();
-    const summary: ProjectSummary = {
-      projectId: randomUUID(),
-      path: request.path,
-      schemaVersion: PROJECT_SCHEMA_VERSION,
-      setup: request.setup,
-      createdAt: now,
-      updatedAt: now
-    };
-    projectStore.set(summary);
-    importSession.bindProject(summary.projectId);
-    return { ok: true as const, value: summary };
+  // SQLite-backed: create writes a new .statementdesk file at `path`; open reads one.
+  handle(IPC_CHANNELS.projectCreate, async (request) => {
+    try {
+      const repo = ProjectRepository.create(request.path, request.setup);
+      projectStore.set(repo);
+      importSession.bindProject(repo.projectId);
+      await addRecentProject(request.path);
+      return { ok: true as const, value: repo.getProject() };
+    } catch (err) {
+      return failureFrom(err);
+    }
   });
 
-  handle(IPC_CHANNELS.projectOpen, () => ({
-    ok: false as const,
-    error: { code: 'NOT_IMPLEMENTED', message: 'Opening saved projects becomes available once persistence lands.' }
-  }));
+  handle(IPC_CHANNELS.projectOpen, async (request) => {
+    try {
+      const repo = ProjectRepository.open(request.path);
+      projectStore.set(repo);
+      importSession.bindProject(repo.projectId);
+      await addRecentProject(request.path);
+      return { ok: true as const, value: repo.getProject() };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
 
   handle(IPC_CHANNELS.projectClose, () => {
     projectStore.clear();
@@ -219,6 +284,15 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   });
 
   handle(IPC_CHANNELS.projectGetState, (): ProjectState => ({ project: projectStore.get() }));
+
+  handle(IPC_CHANNELS.projectSaveSettings, (request) => {
+    try {
+      const repo = projectStore.requireRepo();
+      return { ok: true as const, value: repo.updateSettings(request.settings) };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
 
   /* ------------------------- Import (worker-based) ------------------------- */
 
@@ -254,6 +328,23 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       });
       importSession.bindProject(config.scope.projectId);
       importSession.set(config.side, config, result);
+      // Persist the import (single transaction) so reconciliation reads from the DB.
+      const repo = projectStore.repository();
+      if (repo) {
+        repo.saveImport({
+          config,
+          fileName: result.fileName,
+          kind: result.kind,
+          sha256: result.sha256,
+          sizeBytes: result.sizeBytes,
+          sheetName: result.sheetName,
+          importedCents: result.control.importedCents,
+          controlCents: result.control.controlCents,
+          controlStatus: result.control.status,
+          counts: result.counts,
+          canonicalRows: result.canonicalRows
+        });
+      }
       return { ok: true as const, value: toSummary(result) };
     } catch (err) {
       return failureFrom(err);
@@ -263,5 +354,56 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   handle(IPC_CHANNELS.importCancel, (request) => {
     cancelImportJob(request.requestId);
     return { ok: true as const, value: null };
+  });
+
+  /* --------------------------- Reconcile & review -------------------------- */
+
+  handle(IPC_CHANNELS.reconcileRun, () => {
+    try {
+      return { ok: true as const, value: projectStore.requireRepo().createRun() };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  handle(IPC_CHANNELS.reconcileGetRun, (request) => {
+    try {
+      return { ok: true as const, value: projectStore.requireRepo().getRun(request.runId) };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  handle(IPC_CHANNELS.reconcileListRuns, () => {
+    try {
+      return { ok: true as const, value: projectStore.requireRepo().listRuns() };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  handle(IPC_CHANNELS.reviewRecord, (request) => {
+    try {
+      const repo = projectStore.requireRepo();
+      const event = repo.recordReview({
+        outcomeKey: request.outcomeKey,
+        runId: request.runId ?? null,
+        decision: request.decision,
+        ...(request.reviewer === undefined ? {} : { reviewer: request.reviewer }),
+        ...(request.note === undefined ? {} : { note: request.note }),
+        ...(request.supersedesId === undefined ? {} : { supersedesId: request.supersedesId })
+      });
+      return { ok: true as const, value: event };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  handle(IPC_CHANNELS.reviewList, () => {
+    try {
+      return { ok: true as const, value: projectStore.requireRepo().listReviews() };
+    } catch (err) {
+      return failureFrom(err);
+    }
   });
 }

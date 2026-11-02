@@ -1,32 +1,37 @@
 /**
- * Holds the single project that is currently open in this process.
- *
- * Phase 3 keeps the project purely in memory so the Setup -> Import -> Validation
- * flow works end to end before persistence lands. Phase 4 backs the same surface
- * with the SQLite repository (create writes a .statementdesk file; open reads one).
+ * Holds the single SQLite-backed project repository open in this process.
+ * The renderer sees one project at a time; create/open swap the repository.
  */
 import type { ProjectSummary } from '@shared/contracts';
+import type { ProjectRepository } from '../storage';
+import { LATEST_SCHEMA_VERSION } from '../storage/migrations';
 
-export const PROJECT_SCHEMA_VERSION = 1;
+export const PROJECT_SCHEMA_VERSION = LATEST_SCHEMA_VERSION;
 
 class ProjectStore {
-  private current: ProjectSummary | null = null;
+  private repo: ProjectRepository | null = null;
 
-  set(summary: ProjectSummary): void {
-    this.current = summary;
+  set(repo: ProjectRepository): void {
+    if (this.repo) this.repo.close();
+    this.repo = repo;
   }
 
   get(): ProjectSummary | null {
-    return this.current;
+    return this.repo ? this.repo.getProject() : null;
   }
 
-  requireOpen(): ProjectSummary {
-    if (!this.current) throw new Error('No project is open');
-    return this.current;
+  repository(): ProjectRepository | null {
+    return this.repo;
+  }
+
+  requireRepo(): ProjectRepository {
+    if (!this.repo) throw new Error('No project is open');
+    return this.repo;
   }
 
   clear(): void {
-    this.current = null;
+    if (this.repo) this.repo.close();
+    this.repo = null;
   }
 }
 

@@ -52,4 +52,28 @@ describe('IPC request schemas (main-side validation)', () => {
     expect(mainSideParse(IPC_CHANNELS.projectCreate, [{ path: '/p.statementdesk', setup: { ...goodSetup, cutoffDate: '2026-9-30' } }]).success).toBe(false);
     expect(mainSideParse(IPC_CHANNELS.projectCreate, [{ path: '/p.statementdesk', setup: { ...goodSetup, projectName: '   ' } }]).success).toBe(false);
   });
+
+  it('validates the Phase 4 reconcile/review/settings channels', () => {
+    // Argument-less reconcile channels reject any payload.
+    expect(mainSideParse(IPC_CHANNELS.reconcileRun, []).success).toBe(true);
+    expect(mainSideParse(IPC_CHANNELS.reconcileRun, [{}]).success).toBe(false);
+    expect(mainSideParse(IPC_CHANNELS.reconcileListRuns, []).success).toBe(true);
+
+    // getRun needs a non-empty runId.
+    expect(mainSideParse(IPC_CHANNELS.reconcileGetRun, [{ runId: 'run-1' }]).success).toBe(true);
+    expect(mainSideParse(IPC_CHANNELS.reconcileGetRun, [{}]).success).toBe(false);
+    expect(mainSideParse(IPC_CHANNELS.reconcileGetRun, [{ runId: '' }]).success).toBe(false);
+
+    // review.record: valid decision enum required; stray/unknown decisions rejected.
+    expect(mainSideParse(IPC_CHANNELS.reviewRecord, [{ outcomeKey: 'k', decision: 'investigate' }]).success).toBe(true);
+    expect(mainSideParse(IPC_CHANNELS.reviewRecord, [{ outcomeKey: 'k', decision: 'INVESTIGATE' }]).success).toBe(false);
+    expect(mainSideParse(IPC_CHANNELS.reviewRecord, [{ outcomeKey: '', decision: 'investigate' }]).success).toBe(false);
+    expect(mainSideParse(IPC_CHANNELS.reviewRecord, [{ decision: 'investigate' }]).success).toBe(false);
+    expect(mainSideParse(IPC_CHANNELS.reviewList, [{}]).success).toBe(true);
+    expect(mainSideParse(IPC_CHANNELS.reviewList, [{ runId: '' }]).success).toBe(false);
+
+    // saveSettings: at least one field required; unknown fields and empty patch rejected.
+    expect(mainSideParse(IPC_CHANNELS.projectSaveSettings, [{ settings: { projectName: 'New' } }]).success).toBe(true);
+    expect(mainSideParse(IPC_CHANNELS.projectSaveSettings, [{ settings: {} }]).success).toBe(false);
+  });
 });

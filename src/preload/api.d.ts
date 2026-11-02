@@ -21,10 +21,15 @@ import type {
   PickInputFileRequest,
   PickProjectPathRequest,
   ProjectSetup,
+  ProjectSettingsPatch,
   ProjectState,
   ProjectSummary,
   RecentProject,
-  Result
+  Result,
+  ReviewEvent,
+  ReviewRecordRequest,
+  RunMeta,
+  RunView
 } from '@shared/contracts';
 
 export type Unsubscribe = () => void;
@@ -35,6 +40,8 @@ export interface StatementDeskApi {
     getRecentProjects(): Promise<RecentProject[]>;
     /** A .statementdesk path handed to the app by Finder/Dock before the UI was ready. */
     getPendingOpenFile(): Promise<{ path: string } | null>;
+    /** Test/e2e helper: create a temp project seeded with the bundled golden samples. */
+    openSample(): Promise<Result<ProjectSummary>>;
     onMenuAction(listener: (action: MenuAction) => void): Unsubscribe;
     onOpenFileRequested(listener: (path: string) => void): Unsubscribe;
     onThemeChanged(listener: (theme: NativeTheme) => void): Unsubscribe;
@@ -49,6 +56,7 @@ export interface StatementDeskApi {
     open(path: string): Promise<Result<ProjectSummary>>;
     close(): Promise<Result<null>>;
     getState(): Promise<ProjectState>;
+    saveSettings(settings: ProjectSettingsPatch): Promise<Result<ProjectSummary>>;
   };
   readonly imports: {
     inspect(request: ImportInspectRequest): Promise<Result<InspectResult>>;
@@ -56,6 +64,15 @@ export interface StatementDeskApi {
     run(request: ImportRunRequest): Promise<Result<ImportSummary>>;
     cancel(request: ImportCancelRequest): Promise<Result<null>>;
     onProgress(listener: (progress: ImportProgress) => void): Unsubscribe;
+  };
+  readonly reconcile: {
+    run(): Promise<Result<RunView>>;
+    getRun(runId: string): Promise<Result<RunView>>;
+    listRuns(): Promise<Result<RunMeta[]>>;
+  };
+  readonly review: {
+    record(request: ReviewRecordRequest): Promise<Result<ReviewEvent>>;
+    list(request?: { runId?: string }): Promise<Result<ReviewEvent[]>>;
   };
 }
 

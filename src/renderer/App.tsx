@@ -13,10 +13,10 @@ import { PendingPage } from './pages/PendingPage';
 import { SetupPage } from './pages/SetupPage';
 import { ImportMappingPage } from './pages/ImportMappingPage';
 import { ValidationPage } from './pages/ValidationPage';
+import { ResultsPage } from './pages/ResultsPage';
+import { ReviewPage } from './pages/ReviewPage';
 
-const PAGE_DESCRIPTIONS: Record<Exclude<PageId, 'home' | 'setup' | 'import' | 'validation'>, string> = {
-  results: 'Reconciliation results appear after the comparison has been run.',
-  review: 'Exception review becomes available once results exist.',
+const PAGE_DESCRIPTIONS: Record<Exclude<PageId, 'home' | 'setup' | 'import' | 'validation' | 'results' | 'review'>, string> = {
   export: 'Exports become available once a reconciliation run exists.',
   feedback: 'The offline feedback form becomes available in a later step of this beta.'
 };
@@ -27,13 +27,19 @@ export function App() {
   const [page, setPage] = useState<PageId>('home');
   const workflow = useWorkflow();
   const requestId = useId();
+  const [running, setRunning] = useState(false);
+  const [reviewKey, setReviewKey] = useState<string | null>(null);
 
   const enabledPages = useMemo(() => {
     const set = new Set<PageId>(['home', 'setup']);
     if (workflow.project) set.add('import');
     if (workflow.project && workflow.bothImported) set.add('validation');
+    if (workflow.run) {
+      set.add('results');
+      set.add('review');
+    }
     return set;
-  }, [workflow.project, workflow.bothImported]);
+  }, [workflow.project, workflow.bothImported, workflow.run]);
 
   const navigate = useCallback(
     (target: PageId) => {
@@ -54,6 +60,22 @@ export function App() {
     if (hasApi()) void getApi().project.close();
     workflow.closeProject();
     setPage('home');
+  }, [workflow]);
+
+  const runReconcile = useCallback(async () => {
+    if (!hasApi()) return;
+    setRunning(true);
+    try {
+      const res = await getApi().reconcile.run();
+      if (!res.ok) {
+        window.alert(res.error.message);
+        return;
+      }
+      workflow.setRun(res.value);
+      setPage('results');
+    } finally {
+      setRunning(false);
+    }
   }, [workflow]);
 
   const onMenuAction = useCallback(
@@ -105,7 +127,9 @@ export function App() {
     }
     if (page === 'setup') return <SetupPage workflow={workflow} onCreated={() => setPage('import')} />;
     if (page === 'import') return <ImportMappingPage workflow={workflow} requestId={requestId} onBothImported={() => undefined} />;
-    if (page === 'validation') return <ValidationPage workflow={workflow} running={false} onRun={() => navigate('results')} />;
+    if (page === 'validation') return <ValidationPage workflow={workflow} running={running} onRun={() => void runReconcile()} />;
+    if (page === 'results') return <ResultsPage workflow={workflow} onReview={(key) => { setReviewKey(key); setPage('review'); }} />;
+    if (page === 'review') return <ReviewPage workflow={workflow} focusKey={reviewKey} />;
     return <PendingPage title={WORKFLOW_STEPS.find((s) => s.id === page)?.label ?? ''} description={PAGE_DESCRIPTIONS[page]} />;
   }
 

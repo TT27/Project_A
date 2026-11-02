@@ -106,6 +106,7 @@ export const IPC_CHANNELS = {
   appGetInfo: 'app:getInfo',
   appGetRecentProjects: 'app:getRecentProjects',
   appGetPendingOpenFile: 'app:getPendingOpenFile',
+  appOpenSample: 'app:openSample',
   dialogPickInputFile: 'dialog:pickInputFile',
   dialogPickProjectPath: 'dialog:pickProjectPath',
   dialogPickExportPath: 'dialog:pickExportPath',
@@ -113,12 +114,14 @@ export const IPC_CHANNELS = {
   projectOpen: 'project:open',
   projectClose: 'project:close',
   projectGetState: 'project:getState',
+  projectSaveSettings: 'project:saveSettings',
   importInspect: 'import:inspect',
   importPreview: 'import:preview',
   importRun: 'import:run',
   importCancel: 'import:cancel',
   reconcileRun: 'reconcile:run',
   reconcileGetRun: 'reconcile:getRun',
+  reconcileListRuns: 'reconcile:listRuns',
   reviewRecord: 'review:record',
   reviewList: 'review:list',
   exportWrite: 'export:write',
@@ -450,6 +453,133 @@ export type ImportPreviewRequest = z.infer<typeof ImportPreviewRequestSchema>;
 export type ImportRunRequest = z.infer<typeof ImportRunRequestSchema>;
 export type ImportCancelRequest = z.infer<typeof ImportCancelRequestSchema>;
 
+/* ------------------------- Phase 4: settings ----------------------------- */
+
+/** Editable, low-risk project display settings (identity fields stay fixed). */
+export const ProjectSettingsPatchSchema = z
+  .object({
+    projectName: z.string().trim().min(1).max(200).optional(),
+    supplierName: z.string().trim().min(1).max(200).optional()
+  })
+  .refine((v) => v.projectName !== undefined || v.supplierName !== undefined, {
+    message: 'At least one setting must be provided'
+  });
+export type ProjectSettingsPatch = z.infer<typeof ProjectSettingsPatchSchema>;
+
+export const ProjectSaveSettingsRequestSchema = z.object({ settings: ProjectSettingsPatchSchema });
+export const ProjectSaveSettingsResponseSchema = resultSchema(ProjectSummarySchema);
+
+/* ------------------------- Phase 4: reconciliation views ----------------- */
+
+export const CountsByCategorySchema = z.object({
+  EXACT_MATCH: z.number().int().nonnegative(),
+  AMOUNT_DIFFERENCE: z.number().int().nonnegative(),
+  DATE_DIFFERENCE: z.number().int().nonnegative(),
+  STATEMENT_ONLY: z.number().int().nonnegative(),
+  LEDGER_ONLY: z.number().int().nonnegative(),
+  AMBIGUOUS_DUPLICATE_GROUP: z.number().int().nonnegative()
+});
+export type CountsByCategory = z.infer<typeof CountsByCategorySchema>;
+
+export const ReconciliationSummarySchema = z.object({
+  statementRowCount: z.number().int().nonnegative(),
+  ledgerRowCount: z.number().int().nonnegative(),
+  statementTotalCents: CentsSchema,
+  ledgerTotalCents: CentsSchema,
+  differenceCents: z.number().int(),
+  exactMatchCount: z.number().int().nonnegative(),
+  exceptionCount: z.number().int().nonnegative(),
+  unresolvedCount: z.number().int().nonnegative(),
+  countsByCategory: CountsByCategorySchema,
+  completeness: CompletenessStatusSchema
+});
+export type ReconciliationSummaryView = z.infer<typeof ReconciliationSummarySchema>;
+
+/** One source row contributing to an outcome (snapshot captured at run time). */
+export const OutcomeRowDetailSchema = z.object({
+  rowId: IdSchema,
+  side: SideSchema,
+  fileName: z.string(),
+  sheetName: z.string().nullable(),
+  sourceRow: z.number().int().positive(),
+  referenceRaw: z.string(),
+  documentDate: IsoDateSchema,
+  outstandingCents: CentsSchema
+});
+export type OutcomeRowDetail = z.infer<typeof OutcomeRowDetailSchema>;
+
+export const ReviewEventSchema = z.object({
+  id: IdSchema,
+  outcomeKey: z.string().min(1),
+  runId: IdSchema.nullable(),
+  decision: ReviewDecisionSchema,
+  reviewer: z.string(),
+  note: z.string(),
+  createdAt: z.string(),
+  supersedesId: IdSchema.nullable()
+});
+export type ReviewEvent = z.infer<typeof ReviewEventSchema>;
+
+export const OutcomeViewSchema = z.object({
+  id: IdSchema,
+  outcomeKey: z.string().min(1),
+  category: OutcomeCategorySchema,
+  referenceKey: z.string(),
+  documentType: DocumentTypeSchema,
+  statementCents: CentsSchema,
+  ledgerCents: CentsSchema,
+  differenceCents: z.number().int(),
+  reasonCodes: z.array(ReasonCodeSchema),
+  statementDate: IsoDateSchema.nullable(),
+  ledgerDate: IsoDateSchema.nullable(),
+  rows: z.array(OutcomeRowDetailSchema),
+  review: ReviewEventSchema.nullable()
+});
+export type OutcomeView = z.infer<typeof OutcomeViewSchema>;
+
+export const RunSettingsSchema = z.object({
+  statementControlCents: CentsSchema.nullable(),
+  ledgerControlCents: CentsSchema.nullable()
+});
+export type RunSettings = z.infer<typeof RunSettingsSchema>;
+
+export const RunViewSchema = z.object({
+  runId: IdSchema,
+  projectId: IdSchema,
+  engineVersion: z.string(),
+  createdAt: z.string(),
+  settings: RunSettingsSchema,
+  summary: ReconciliationSummarySchema,
+  outcomes: z.array(OutcomeViewSchema)
+});
+export type RunView = z.infer<typeof RunViewSchema>;
+
+export const RunMetaSchema = z.object({
+  runId: IdSchema,
+  createdAt: z.string(),
+  engineVersion: z.string(),
+  exceptionCount: z.number().int().nonnegative(),
+  differenceCents: z.number().int()
+});
+export type RunMeta = z.infer<typeof RunMetaSchema>;
+
+export const ReconcileRunResponseSchema = resultSchema(RunViewSchema);
+export const ReconcileGetRunRequestSchema = z.object({ runId: IdSchema });
+export const ReconcileListRunsResponseSchema = resultSchema(z.array(RunMetaSchema));
+
+export const ReviewRecordRequestSchema = z.object({
+  outcomeKey: z.string().min(1).max(512),
+  runId: IdSchema.nullable().optional(),
+  decision: ReviewDecisionSchema,
+  reviewer: z.string().trim().max(120).optional(),
+  note: z.string().max(4000).optional(),
+  supersedesId: IdSchema.optional()
+});
+export const ReviewRecordResponseSchema = resultSchema(ReviewEventSchema);
+export const ReviewListRequestSchema = z.object({ runId: IdSchema.optional() });
+export const ReviewListResponseSchema = resultSchema(z.array(ReviewEventSchema));
+export type ReviewRecordRequest = z.infer<typeof ReviewRecordRequestSchema>;
+
 /* Channel registry: request + response schema per channel. The preload uses this
  * to validate both directions; the main process re-validates requests. */
 export const IPC_CONTRACTS = {
@@ -459,14 +589,21 @@ export const IPC_CONTRACTS = {
   [IPC_CHANNELS.dialogPickInputFile]: { request: PickInputFileRequestSchema, response: PickedFileSchema },
   [IPC_CHANNELS.dialogPickProjectPath]: { request: PickProjectPathRequestSchema, response: PickedPathSchema },
   [IPC_CHANNELS.dialogPickExportPath]: { request: PickExportPathRequestSchema, response: PickedPathSchema },
+  [IPC_CHANNELS.appOpenSample]: { request: z.undefined(), response: ProjectCreateResponseSchema },
   [IPC_CHANNELS.projectCreate]: { request: ProjectCreateRequestSchema, response: ProjectCreateResponseSchema },
   [IPC_CHANNELS.projectOpen]: { request: ProjectOpenRequestSchema, response: ProjectOpenResponseSchema },
   [IPC_CHANNELS.projectClose]: { request: z.undefined(), response: VoidResultSchema },
   [IPC_CHANNELS.projectGetState]: { request: z.undefined(), response: ProjectStateSchema },
+  [IPC_CHANNELS.projectSaveSettings]: { request: ProjectSaveSettingsRequestSchema, response: ProjectSaveSettingsResponseSchema },
   [IPC_CHANNELS.importInspect]: { request: ImportInspectRequestSchema, response: ImportInspectResponseSchema },
   [IPC_CHANNELS.importPreview]: { request: ImportPreviewRequestSchema, response: ImportPreviewResponseSchema },
   [IPC_CHANNELS.importRun]: { request: ImportRunRequestSchema, response: ImportRunResponseSchema },
-  [IPC_CHANNELS.importCancel]: { request: ImportCancelRequestSchema, response: VoidResultSchema }
+  [IPC_CHANNELS.importCancel]: { request: ImportCancelRequestSchema, response: VoidResultSchema },
+  [IPC_CHANNELS.reconcileRun]: { request: z.undefined(), response: ReconcileRunResponseSchema },
+  [IPC_CHANNELS.reconcileGetRun]: { request: ReconcileGetRunRequestSchema, response: ReconcileRunResponseSchema },
+  [IPC_CHANNELS.reconcileListRuns]: { request: z.undefined(), response: ReconcileListRunsResponseSchema },
+  [IPC_CHANNELS.reviewRecord]: { request: ReviewRecordRequestSchema, response: ReviewRecordResponseSchema },
+  [IPC_CHANNELS.reviewList]: { request: ReviewListRequestSchema, response: ReviewListResponseSchema }
 } as const;
 
 export type IpcContracts = typeof IPC_CONTRACTS;

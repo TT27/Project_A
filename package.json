@@ -34,6 +34,8 @@
     "dist:win": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^13.0.3",
     "exceljs": "4.4.0",
     "papaparse": "5.7.0",
     "zod": "4.6.7"

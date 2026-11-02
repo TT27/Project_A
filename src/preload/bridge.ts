@@ -72,6 +72,7 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
       getInfo: () => invoke(IPC_CHANNELS.appGetInfo, undefined),
       getRecentProjects: () => invoke(IPC_CHANNELS.appGetRecentProjects, undefined),
       getPendingOpenFile: () => invoke(IPC_CHANNELS.appGetPendingOpenFile, undefined),
+      openSample: () => invoke(IPC_CHANNELS.appOpenSample, undefined),
       onMenuAction: makeSubscriber(ipc, IPC_EVENTS.menuAction, MenuActionSchema),
       onOpenFileRequested: makeSubscriber(ipc, IPC_EVENTS.openFileRequested, LocalPathSchema),
       onThemeChanged: makeSubscriber(ipc, IPC_EVENTS.nativeThemeChanged, NativeThemeSchema)
@@ -85,7 +86,8 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
       create: (path, setup) => invoke(IPC_CHANNELS.projectCreate, { path, setup }),
       open: (path) => invoke(IPC_CHANNELS.projectOpen, { path }),
       close: () => invoke(IPC_CHANNELS.projectClose, undefined),
-      getState: () => invoke(IPC_CHANNELS.projectGetState, undefined)
+      getState: () => invoke(IPC_CHANNELS.projectGetState, undefined),
+      saveSettings: (settings) => invoke(IPC_CHANNELS.projectSaveSettings, { settings })
     },
     imports: {
       inspect: (request) => invoke(IPC_CHANNELS.importInspect, request),
@@ -93,6 +95,15 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
       run: (request) => invoke(IPC_CHANNELS.importRun, request),
       cancel: (request) => invoke(IPC_CHANNELS.importCancel, request),
       onProgress: makeSubscriber(ipc, IPC_EVENTS.importProgress, ImportProgressSchema)
+    },
+    reconcile: {
+      run: () => invoke(IPC_CHANNELS.reconcileRun, undefined),
+      getRun: (runId) => invoke(IPC_CHANNELS.reconcileGetRun, { runId }),
+      listRuns: () => invoke(IPC_CHANNELS.reconcileListRuns, undefined)
+    },
+    review: {
+      record: (request) => invoke(IPC_CHANNELS.reviewRecord, request),
+      list: (request) => invoke(IPC_CHANNELS.reviewList, request ?? {})
     }
   };
   // Freeze so the renderer cannot monkey-patch the bridge.
@@ -100,13 +111,17 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
   Object.freeze(api.dialog);
   Object.freeze(api.project);
   Object.freeze(api.imports);
+  Object.freeze(api.reconcile);
+  Object.freeze(api.review);
   return Object.freeze(api);
 }
 
 /** The exact list of methods the renderer may call. Tested in tests/unit/preload-surface.test.ts. */
 export const EXPECTED_API_SURFACE: Record<keyof StatementDeskApi, readonly string[]> = {
-  app: ['getInfo', 'getRecentProjects', 'getPendingOpenFile', 'onMenuAction', 'onOpenFileRequested', 'onThemeChanged'],
+  app: ['getInfo', 'getRecentProjects', 'getPendingOpenFile', 'openSample', 'onMenuAction', 'onOpenFileRequested', 'onThemeChanged'],
   dialog: ['pickInputFile', 'pickProjectPath', 'pickExportPath'],
-  project: ['create', 'open', 'close', 'getState'],
-  imports: ['inspect', 'preview', 'run', 'cancel', 'onProgress']
+  project: ['create', 'open', 'close', 'getState', 'saveSettings'],
+  imports: ['inspect', 'preview', 'run', 'cancel', 'onProgress'],
+  reconcile: ['run', 'getRun', 'listRuns'],
+  review: ['record', 'list']
 };
