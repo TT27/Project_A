@@ -3,9 +3,9 @@
  * shared Zod contract before doing any work, independent of the preload's own check.
  */
 import { randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { stat, writeFile } from 'node:fs/promises';
 import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { release, tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 import { app, dialog, ipcMain, nativeTheme, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { ENGINE_VERSION } from '@domain/version';
@@ -33,6 +33,8 @@ import { runImportJob, cancelImportJob } from './importService';
 import { importSession } from './session';
 import { projectStore } from './projectStore';
 import { ProjectRepository, StorageError } from '../storage';
+import { buildReport, buildWorkbookBuffer, buildExceptionsCsv, buildHtmlReport, makeDiagnostics } from '../export';
+import { authorisePath, isAuthorisedPath } from './exportAuth';
 import { readRecentProjects, addRecentProject } from './recent';
 
 function failureFrom(err: unknown): { ok: false; error: ErrorInfo } {
@@ -249,7 +251,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       properties: ['createDirectory', 'showOverwriteConfirmation']
     };
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options);
-    return result.canceled || !result.filePath ? null : { path: result.filePath };
+    if (result.canceled || !result.filePath) return null;
+    authorisePath(result.filePath);
+    return { path: result.filePath };
   });
 
   // SQLite-backed: create writes a new .statementdesk file at `path`; open reads one.
@@ -402,6 +406,72 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   handle(IPC_CHANNELS.reviewList, () => {
     try {
       return { ok: true as const, value: projectStore.requireRepo().listReviews() };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  /* ------------------------------- Exports -------------------------------- */
+
+  handle(IPC_CHANNELS.exportWrite, async (request) => {
+    try {
+      // The destination must be a path the user chose through a native save dialog
+      // in this session; refuse anything else (guards path traversal / stray writes).
+      if (!isAuthorisedPath(request.destPath)) {
+        return { ok: false as const, error: { code: 'UNAUTHORISED_PATH', message: 'Choose a destination with the Save dialog before exporting.' } };
+      }
+      const repo = projectStore.requireRepo();
+      const run = repo.latestRun();
+      if (!run) return { ok: false as const, error: { code: 'NO_RUN', message: 'Run a reconciliation before exporting.' } };
+      const model = buildReport({ repo, run, appVersion: app.getVersion() });
+
+      let data: Buffer;
+      if (request.kind === 'xlsx') data = await buildWorkbookBuffer(model);
+      else if (request.kind === 'csv') data = Buffer.from(buildExceptionsCsv(model), 'utf8');
+      else data = Buffer.from(buildHtmlReport(model), 'utf8');
+
+      await writeFile(request.destPath, data);
+      return { ok: true as const, value: { path: request.destPath, bytes: data.byteLength } };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  handle(IPC_CHANNELS.diagnosticsBuild, () => {
+    try {
+      const repo = projectStore.repository();
+      const run = repo?.latestRun() ?? null;
+      const diagnostics = makeDiagnostics({
+        appVersion: app.getVersion(),
+        platform: process.platform,
+        osVersion: release(),
+        electronVersion: process.versions.electron ?? 'unknown',
+        engineVersion: ENGINE_VERSION,
+        statementRowCount: run?.summary.statementRowCount ?? null,
+        ledgerRowCount: run?.summary.ledgerRowCount ?? null,
+        exceptionCount: run?.summary.exceptionCount ?? null,
+        errorCodes: []
+      });
+      return { ok: true as const, value: diagnostics };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  handle(IPC_CHANNELS.feedbackSave, async (request) => {
+    try {
+      if (!isAuthorisedPath(request.destPath)) {
+        return { ok: false as const, error: { code: 'UNAUTHORISED_PATH', message: 'Choose a destination with the Save dialog before saving feedback.' } };
+      }
+      const payload = {
+        kind: 'statementdesk-feedback',
+        savedAt: new Date().toISOString(),
+        ...request.feedback,
+        diagnostics: request.feedback.includeDiagnostics ? request.feedback.diagnostics : null
+      };
+      const data = Buffer.from(JSON.stringify(payload, null, 2), 'utf8');
+      await writeFile(request.destPath, data);
+      return { ok: true as const, value: { path: request.destPath, bytes: data.byteLength } };
     } catch (err) {
       return failureFrom(err);
     }

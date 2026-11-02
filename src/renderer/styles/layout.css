@@ -278,3 +278,32 @@
 .issue { font-size: var(--font-size-xs); }
 .issue-error { color: var(--color-danger); }
 .issue-warning { color: var(--color-warning); }
+
+
+/* ---- Phase 5: Export & Feedback pages ---- */
+.page { padding: var(--space-5, 24px); max-width: 960px; }
+.muted { color: var(--color-text-secondary, #86868b); }
+.export-list { display: flex; flex-direction: column; gap: var(--space-3, 12px); margin-top: var(--space-4, 16px); }
+.export-card {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4, 16px);
+  padding: var(--space-4, 16px); border: 1px solid var(--color-border, #d2d2d7); border-radius: 10px;
+  background: var(--color-bg-elevated, #fff);
+}
+.export-card-main { flex: 1; }
+.export-card h3 { margin: 0 0 4px; font-size: var(--font-size-md, 15px); }
+.export-status { margin: 8px 0 0; font-size: var(--font-size-sm, 13px); }
+.export-status-ok { color: var(--color-success, #1f7a3a); }
+.export-status-error { color: var(--color-danger, #c0392b); }
+.export-status-busy { color: var(--color-text-secondary, #86868b); }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3, 12px); margin: var(--space-4, 16px) 0; }
+.rating { border: 1px solid var(--color-border, #d2d2d7); border-radius: 8px; padding: var(--space-2, 8px) var(--space-3, 12px); margin: var(--space-2, 8px) 0; }
+.rating legend { font-weight: 600; font-size: var(--font-size-sm, 13px); padding: 0 6px; }
+.rating-option { margin-right: var(--space-3, 12px); font-size: var(--font-size-sm, 13px); }
+.checkbox { display: flex; align-items: flex-start; gap: var(--space-2, 8px); margin: var(--space-3, 12px) 0; font-size: var(--font-size-sm, 13px); }
+.diagnostics-preview { margin: var(--space-3, 12px) 0; border: 1px solid var(--color-border, #d2d2d7); border-radius: 8px; padding: var(--space-3, 12px); }
+.diagnostics-preview summary { cursor: pointer; font-weight: 600; }
+.diagnostics-preview pre {
+  background: var(--color-bg-inset, #f5f5f7); padding: var(--space-3, 12px); border-radius: 6px;
+  overflow-x: auto; font-size: 12px;
+}
+.actions { margin-top: var(--space-4, 16px); }

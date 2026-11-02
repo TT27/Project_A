@@ -104,6 +104,17 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
     review: {
       record: (request) => invoke(IPC_CHANNELS.reviewRecord, request),
       list: (request) => invoke(IPC_CHANNELS.reviewList, request ?? {})
+    },
+    exports: {
+      writeXlsx: (destPath) => invoke(IPC_CHANNELS.exportWrite, { kind: 'xlsx', destPath }),
+      writeCsv: (destPath) => invoke(IPC_CHANNELS.exportWrite, { kind: 'csv', destPath }),
+      writeHtml: (destPath) => invoke(IPC_CHANNELS.exportWrite, { kind: 'html', destPath })
+    },
+    diagnostics: {
+      build: () => invoke(IPC_CHANNELS.diagnosticsBuild, undefined)
+    },
+    feedback: {
+      save: (request) => invoke(IPC_CHANNELS.feedbackSave, request)
     }
   };
   // Freeze so the renderer cannot monkey-patch the bridge.
@@ -113,6 +124,9 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
   Object.freeze(api.imports);
   Object.freeze(api.reconcile);
   Object.freeze(api.review);
+  Object.freeze(api.exports);
+  Object.freeze(api.diagnostics);
+  Object.freeze(api.feedback);
   return Object.freeze(api);
 }
 
@@ -123,5 +137,8 @@ export const EXPECTED_API_SURFACE: Record<keyof StatementDeskApi, readonly strin
   project: ['create', 'open', 'close', 'getState', 'saveSettings'],
   imports: ['inspect', 'preview', 'run', 'cancel', 'onProgress'],
   reconcile: ['run', 'getRun', 'listRuns'],
-  review: ['record', 'list']
+  review: ['record', 'list'],
+  exports: ['writeXlsx', 'writeCsv', 'writeHtml'],
+  diagnostics: ['build'],
+  feedback: ['save']
 };

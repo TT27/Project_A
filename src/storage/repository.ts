@@ -53,6 +53,32 @@ export interface ImportRecord {
   canonicalRows: readonly CanonicalRow[];
 }
 
+/** Source-file identification + import counters for one imported side. */
+export interface SourceInfo {
+  side: Side;
+  fileName: string;
+  kind: string;
+  sha256: string;
+  sizeBytes: number;
+  sheetName: string | null;
+  importedCents: number;
+  controlCents: number | null;
+  controlStatus: string;
+  counts: Record<string, number>;
+  importedAt: string;
+}
+
+/** A single imported (included) row, used for the ImportedStatement/ImportedLedger sheets. */
+export interface ImportedRowInfo {
+  sourceRow: number;
+  sheetName: string | null;
+  referenceRaw: string;
+  referenceKey: string;
+  documentType: 'invoice' | 'credit_note';
+  documentDate: string;
+  outstandingCents: number;
+}
+
 interface ProjectRow {
   id: string;
   schema_version: number;
@@ -575,6 +601,54 @@ export class ProjectRepository {
       note: e.note,
       createdAt: e.created_at,
       supersedesId: e.supersedes_id
+    }));
+  }
+
+  /** Source-file identification for every imported side (for report headers/audit). */
+  getSources(): SourceInfo[] {
+    const rows = this.db
+      .prepare('SELECT * FROM sources WHERE project_id = ? ORDER BY side')
+      .all(this.projectId) as {
+      side: Side;
+      file_name: string;
+      kind: string;
+      sha256: string;
+      size_bytes: number;
+      sheet_name: string | null;
+      imported_cents: number;
+      control_cents: number | null;
+      control_status: string;
+      counts_json: string;
+      imported_at: string;
+    }[];
+    return rows.map((r) => ({
+      side: r.side,
+      fileName: r.file_name,
+      kind: r.kind,
+      sha256: r.sha256,
+      sizeBytes: r.size_bytes,
+      sheetName: r.sheet_name,
+      importedCents: r.imported_cents,
+      controlCents: r.control_cents,
+      controlStatus: r.control_status,
+      counts: JSON.parse(r.counts_json) as Record<string, number>,
+      importedAt: r.imported_at
+    }));
+  }
+
+  /** The canonical (included) rows for one side, as imported — used for the ImportedStatement/ImportedLedger sheets. */
+  getImportedRows(side: Side): ImportedRowInfo[] {
+    const rows = this.db
+      .prepare('SELECT * FROM rows WHERE project_id = ? AND side = ? ORDER BY source_row')
+      .all(this.projectId, side) as RowRecord[];
+    return rows.map((r) => ({
+      sourceRow: r.source_row,
+      sheetName: r.sheet_name,
+      referenceRaw: r.reference_raw,
+      referenceKey: r.reference_key,
+      documentType: r.document_type as ImportedRowInfo['documentType'],
+      documentDate: r.document_date,
+      outstandingCents: r.outstanding_cents
     }));
   }
 

@@ -217,6 +217,9 @@ export const PickExportPathRequestSchema = z.object({
 });
 export type PickExportPathRequest = z.infer<typeof PickExportPathRequestSchema>;
 
+/* The export/feedback/diagnostics schemas that use resultSchema() live after it is
+ * defined (see "Phase 5: export, feedback, diagnostics" below). */
+
 /* project:* — Phase 1 defines the surface; Phase 4 fills in persistence. */
 export const ProjectSetupSchema = z.object({
   projectName: z.string().trim().min(1).max(200),
@@ -266,6 +269,55 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: ErrorInfo }
 export const ProjectCreateResponseSchema = resultSchema(ProjectSummarySchema);
 export const ProjectOpenResponseSchema = resultSchema(ProjectSummarySchema);
 export const VoidResultSchema = resultSchema(z.null());
+
+/* ------------------------- Phase 5: export, feedback, diagnostics -------- */
+
+export const ExportWriteRequestSchema = z.object({
+  kind: ExportKindSchema,
+  destPath: LocalPathSchema
+});
+export type ExportWriteRequest = z.infer<typeof ExportWriteRequestSchema>;
+
+export const ExportWriteResultSchema = z.object({
+  path: LocalPathSchema,
+  bytes: z.number().int().nonnegative()
+});
+export const ExportWriteResponseSchema = resultSchema(ExportWriteResultSchema);
+export type ExportWriteResult = z.infer<typeof ExportWriteResultSchema>;
+
+/** Non-identifying technical facts only — never customer data. */
+export const DiagnosticsSchema = z.object({
+  appVersion: z.string(),
+  platform: z.string(),
+  osVersion: z.string(),
+  electronVersion: z.string(),
+  engineVersion: z.string(),
+  statementRowCount: z.number().int().nonnegative().nullable(),
+  ledgerRowCount: z.number().int().nonnegative().nullable(),
+  exceptionCount: z.number().int().nonnegative().nullable(),
+  errorCodes: z.array(z.string().max(64)).max(50)
+});
+export type Diagnostics = z.infer<typeof DiagnosticsSchema>;
+export const DiagnosticsBuildResponseSchema = resultSchema(DiagnosticsSchema);
+
+export const FeedbackSchema = z.object({
+  preparationMinutes: z.number().int().min(0).max(100000),
+  reviewMinutes: z.number().int().min(0).max(100000),
+  usefulness: z.number().int().min(1).max(5),
+  likelihood: z.number().int().min(1).max(5),
+  problems: z.string().max(8000),
+  includeDiagnostics: z.boolean(),
+  diagnostics: DiagnosticsSchema.nullable()
+});
+export type Feedback = z.infer<typeof FeedbackSchema>;
+
+export const FeedbackSaveRequestSchema = z.object({
+  destPath: LocalPathSchema,
+  feedback: FeedbackSchema
+});
+export type FeedbackSaveRequest = z.infer<typeof FeedbackSaveRequestSchema>;
+export const FeedbackSaveResultSchema = z.object({ path: LocalPathSchema, bytes: z.number().int().nonnegative() });
+export const FeedbackSaveResponseSchema = resultSchema(FeedbackSaveResultSchema);
 
 /* ------------------------------------------------------------------------ */
 /* Import and mapping (section 6)                                             */
@@ -603,7 +655,10 @@ export const IPC_CONTRACTS = {
   [IPC_CHANNELS.reconcileGetRun]: { request: ReconcileGetRunRequestSchema, response: ReconcileRunResponseSchema },
   [IPC_CHANNELS.reconcileListRuns]: { request: z.undefined(), response: ReconcileListRunsResponseSchema },
   [IPC_CHANNELS.reviewRecord]: { request: ReviewRecordRequestSchema, response: ReviewRecordResponseSchema },
-  [IPC_CHANNELS.reviewList]: { request: ReviewListRequestSchema, response: ReviewListResponseSchema }
+  [IPC_CHANNELS.reviewList]: { request: ReviewListRequestSchema, response: ReviewListResponseSchema },
+  [IPC_CHANNELS.exportWrite]: { request: ExportWriteRequestSchema, response: ExportWriteResponseSchema },
+  [IPC_CHANNELS.diagnosticsBuild]: { request: z.undefined(), response: DiagnosticsBuildResponseSchema },
+  [IPC_CHANNELS.feedbackSave]: { request: FeedbackSaveRequestSchema, response: FeedbackSaveResponseSchema }
 } as const;
 
 export type IpcContracts = typeof IPC_CONTRACTS;

@@ -15,11 +15,8 @@ import { ImportMappingPage } from './pages/ImportMappingPage';
 import { ValidationPage } from './pages/ValidationPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { ReviewPage } from './pages/ReviewPage';
-
-const PAGE_DESCRIPTIONS: Record<Exclude<PageId, 'home' | 'setup' | 'import' | 'validation' | 'results' | 'review'>, string> = {
-  export: 'Exports become available once a reconciliation run exists.',
-  feedback: 'The offline feedback form becomes available in a later step of this beta.'
-};
+import { ExportPage } from './pages/ExportPage';
+import { FeedbackPage } from './pages/FeedbackPage';
 
 export function App() {
   const { info, error: infoError } = useAppInfo();
@@ -31,12 +28,13 @@ export function App() {
   const [reviewKey, setReviewKey] = useState<string | null>(null);
 
   const enabledPages = useMemo(() => {
-    const set = new Set<PageId>(['home', 'setup']);
+    const set = new Set<PageId>(['home', 'setup', 'feedback']);
     if (workflow.project) set.add('import');
     if (workflow.project && workflow.bothImported) set.add('validation');
     if (workflow.run) {
       set.add('results');
       set.add('review');
+      set.add('export');
     }
     return set;
   }, [workflow.project, workflow.bothImported, workflow.run]);
@@ -78,6 +76,28 @@ export function App() {
     }
   }, [workflow]);
 
+  const trySample = useCallback(async () => {
+    if (!hasApi()) return;
+    setRunning(true);
+    try {
+      const res = await getApi().app.openSample();
+      if (!res.ok) {
+        window.alert(res.error.message);
+        return;
+      }
+      workflow.setProject(res.value, {});
+      const runRes = await getApi().reconcile.run();
+      if (runRes.ok) {
+        workflow.setRun(runRes.value);
+        setPage('results');
+      } else {
+        window.alert(runRes.error.message);
+      }
+    } finally {
+      setRunning(false);
+    }
+  }, [workflow]);
+
   const onMenuAction = useCallback(
     (action: MenuAction) => {
       switch (action) {
@@ -94,7 +114,7 @@ export function App() {
           navigate('export');
           break;
         case 'try-sample':
-          navigate('setup');
+          void trySample();
           break;
         case 'help':
           navigate('home');
@@ -104,7 +124,7 @@ export function App() {
           break;
       }
     },
-    [navigate, pickProject, closeProject]
+    [navigate, pickProject, closeProject, trySample]
   );
   useMenuActions(onMenuAction);
 
@@ -130,7 +150,9 @@ export function App() {
     if (page === 'validation') return <ValidationPage workflow={workflow} running={running} onRun={() => void runReconcile()} />;
     if (page === 'results') return <ResultsPage workflow={workflow} onReview={(key) => { setReviewKey(key); setPage('review'); }} />;
     if (page === 'review') return <ReviewPage workflow={workflow} focusKey={reviewKey} />;
-    return <PendingPage title={WORKFLOW_STEPS.find((s) => s.id === page)?.label ?? ''} description={PAGE_DESCRIPTIONS[page]} />;
+    if (page === 'export') return <ExportPage workflow={workflow} />;
+    if (page === 'feedback') return <FeedbackPage />;
+    return <PendingPage title={WORKFLOW_STEPS.find((s) => s.id === page)?.label ?? ''} description="This step is not available yet." />;
   }
 
   return (
