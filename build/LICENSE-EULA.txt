@@ -1,0 +1,6 @@
+StatementDesk 0.1.0 beta
+
+This is pre-release software provided for evaluation. It processes your data
+locally on this computer. Local projects and exported files are not encrypted
+by the application. Review all reconciliation results against your source
+documents before relying on them. No warranty is provided.

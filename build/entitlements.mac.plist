@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- Required by Electron's V8 JIT under the hardened runtime. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- Native modules (better-sqlite3) are loaded from inside the signed bundle. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- StatementDesk is NOT sandboxed by the App Sandbox in v0.1: it reads the user-chosen
+         input files and writes the user-chosen project/export files through native dialogs.
+         No network, camera, microphone, location or automation entitlements are requested. -->
+  </dict>
+</plist>
