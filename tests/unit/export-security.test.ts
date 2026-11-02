@@ -131,7 +131,7 @@ describe('XLSX export security', () => {
   it('writes the reference as formula-guarded text and amounts as real numbers', async () => {
     const buffer = await buildWorkbookBuffer(model([exceptionOutcome()]));
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0]);
     const exc = wb.getWorksheet('Exceptions')!;
     const dataRow = exc.getRow(2);
     expect(dataRow.getCell(1).text).toBe("'=HYPERLINK(\"http://evil\",\"click\")");

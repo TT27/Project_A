@@ -48,3 +48,24 @@ No Apple Developer ID or Windows code-signing certificate is configured. Builds 
 **unsigned development builds**. The notarization hook (`build/notarize.cjs`) activates
 automatically when `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` are set.
 Publisher verification is a release blocker for public distribution.
+
+## Documentation
+
+See the `docs/` directory:
+
+- [User guide](docs/USER_GUIDE.md)
+- [Supported input formats](docs/SUPPORTED_FORMATS.md)
+- [Privacy statement](docs/PRIVACY.md)
+- [Known limitations](docs/KNOWN_LIMITATIONS.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Test & validation report](docs/TEST_AND_VALIDATION_REPORT.md)
+- [Release checklist](docs/RELEASE_CHECKLIST.md)
+- [Third-party notices](docs/THIRD_PARTY_NOTICES.md) · [SBOM](docs/sbom.json)
+- [Implementation report](docs/IMPLEMENTATION_REPORT.md)
+
+## Packaging note
+
+macOS (`npm run dist:mac`, dmg+zip arm64+x64) and Windows (`npm run dist:win`, NSIS x64) installers
+**must be built on their respective target OSes**. The app depends on the native module `better-sqlite3`,
+which `node-gyp` cannot cross-compile from Linux. Builds produced without signing credentials are
+unsigned development builds — publisher verification is a release blocker. See the release checklist.

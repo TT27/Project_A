@@ -40,7 +40,17 @@ test('renderer has no Node access and the bridge is narrow', async () => {
   });
   expect(probe.hasRequire).toBe('undefined');
   expect(probe.hasProcess).toBe('undefined');
-  expect(probe.bridgeKeys).toEqual(['app', 'dialog', 'imports', 'project', 'reconcile', 'review']);
+  expect(probe.bridgeKeys).toEqual([
+    'app',
+    'diagnostics',
+    'dialog',
+    'exports',
+    'feedback',
+    'imports',
+    'project',
+    'reconcile',
+    'review'
+  ]);
 });
 
 test('opens the golden sample, reconciles, records a note and persists it across reopen', async () => {
