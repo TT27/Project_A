@@ -30,11 +30,14 @@ test('launches and shows the Home page with version and local-processing stateme
 });
 
 test('renderer has no Node access and the bridge is narrow', async () => {
-  const probe = await page.evaluate(() => ({
-    hasRequire: typeof (window as unknown as { require?: unknown }).require,
-    hasProcess: typeof (window as unknown as { process?: unknown }).process,
-    bridgeKeys: Object.keys((window as unknown as { statementdesk: object }).statementdesk).sort()
-  }));
+  const probe = await page.evaluate(() => {
+    const g = globalThis as unknown as { require?: unknown; process?: unknown; statementdesk: object };
+    return {
+      hasRequire: typeof g.require,
+      hasProcess: typeof g.process,
+      bridgeKeys: Object.keys(g.statementdesk).sort()
+    };
+  });
   expect(probe.hasRequire).toBe('undefined');
   expect(probe.hasProcess).toBe('undefined');
   expect(probe.bridgeKeys).toEqual(['app', 'dialog', 'project']);
