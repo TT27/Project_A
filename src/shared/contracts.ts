@@ -114,6 +114,7 @@ export const IPC_CHANNELS = {
   projectClose: 'project:close',
   projectGetState: 'project:getState',
   importInspect: 'import:inspect',
+  importPreview: 'import:preview',
   importRun: 'import:run',
   importCancel: 'import:cancel',
   reconcileRun: 'reconcile:run',
@@ -130,8 +131,17 @@ export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 export const IPC_EVENTS = {
   menuAction: 'menu:action',
   openFileRequested: 'app:openFileRequested',
-  nativeThemeChanged: 'app:nativeThemeChanged'
+  nativeThemeChanged: 'app:nativeThemeChanged',
+  importProgress: 'import:progress'
 } as const;
+
+/** Payload for the import-progress push event. */
+export const ImportProgressSchema = z.object({
+  requestId: IdSchema,
+  side: SideSchema,
+  fraction: z.number().min(0).max(1)
+});
+export type ImportProgress = z.infer<typeof ImportProgressSchema>;
 
 export const MenuActionSchema = z.enum([
   'new-reconciliation',
@@ -254,6 +264,192 @@ export const ProjectCreateResponseSchema = resultSchema(ProjectSummarySchema);
 export const ProjectOpenResponseSchema = resultSchema(ProjectSummarySchema);
 export const VoidResultSchema = resultSchema(z.null());
 
+/* ------------------------------------------------------------------------ */
+/* Import and mapping (section 6)                                             */
+/* ------------------------------------------------------------------------ */
+
+export const InputKindSchema = z.enum(['csv', 'xlsx']);
+export type InputKind = z.infer<typeof InputKindSchema>;
+
+export const SignModeSchema = z.enum(['signed_amount', 'by_document_type']);
+export type SignMode = z.infer<typeof SignModeSchema>;
+
+export const DateFormatSchema = z.enum(['DD/MM/YYYY', 'YYYY-MM-DD']);
+export type DateFormat = z.infer<typeof DateFormatSchema>;
+
+export const SheetInfoSchema = z.object({
+  name: z.string(),
+  rowCount: z.number().int().nonnegative(),
+  columnCount: z.number().int().nonnegative(),
+  hidden: z.boolean()
+});
+export type SheetInfo = z.infer<typeof SheetInfoSchema>;
+
+export const InspectPreviewRowSchema = z.object({
+  index: z.number().int().positive(),
+  cells: z.array(z.string()),
+  hidden: z.boolean(),
+  hasFormula: z.boolean(),
+  formulaWithoutValue: z.boolean()
+});
+
+export const InspectPreviewGridSchema = z.object({
+  sheetName: z.string(),
+  columnCount: z.number().int().nonnegative(),
+  rows: z.array(InspectPreviewRowSchema)
+});
+
+export const InspectResultSchema = z.object({
+  kind: InputKindSchema,
+  sheets: z.array(SheetInfoSchema),
+  defaultSheet: z.string(),
+  headerRowGuess: z.number().int().positive(),
+  preview: InspectPreviewGridSchema
+});
+export type InspectResult = z.infer<typeof InspectResultSchema>;
+
+/** Canonical field -> 0-based source column index; -1 means "not mapped". */
+const ColumnIndexSchema = z.number().int().min(-1);
+export const ColumnMappingSchema = z.object({
+  reference: ColumnIndexSchema,
+  documentType: ColumnIndexSchema,
+  documentDate: ColumnIndexSchema,
+  outstanding: ColumnIndexSchema,
+  supplier: ColumnIndexSchema,
+  currency: ColumnIndexSchema,
+  asOfDate: ColumnIndexSchema
+});
+export type ColumnMapping = z.infer<typeof ColumnMappingSchema>;
+
+export const ProjectScopeSchema = z.object({
+  projectId: IdSchema,
+  sourceId: IdSchema,
+  supplierId: z.string().min(1),
+  currency: CurrencySchema,
+  cutoffDate: IsoDateSchema
+});
+export type ProjectScope = z.infer<typeof ProjectScopeSchema>;
+
+export const NormaliseOptionsSchema = z.object({
+  signMode: SignModeSchema,
+  dateFormat: DateFormatSchema,
+  decimalSeparator: z.enum(['.', ',']),
+  allowParentheses: z.boolean(),
+  mappingVersion: z.number().int().nonnegative()
+});
+export type NormaliseOptions = z.infer<typeof NormaliseOptionsSchema>;
+
+export const RowIssueSchema = z.object({
+  code: z.string().min(1).max(64),
+  field: z.string().max(64).optional(),
+  message: z.string().max(500)
+});
+export type RowIssue = z.infer<typeof RowIssueSchema>;
+
+export const RowStatusSchema = z.enum(['valid', 'invalid', 'excluded']);
+export type RowStatus = z.infer<typeof RowStatusSchema>;
+
+export const InterpretedValuesSchema = z.object({
+  reference: z.string(),
+  documentType: z.string(),
+  documentDate: z.string(),
+  outstanding: z.string()
+});
+
+/** Lean row view that crosses IPC (no canonical row / raw cells). */
+export const RowViewSchema = z.object({
+  sourceRow: z.number().int().positive(),
+  status: RowStatusSchema,
+  excludedReason: z.string().max(200).optional(),
+  warnings: z.array(RowIssueSchema),
+  errors: z.array(RowIssueSchema),
+  interpreted: InterpretedValuesSchema
+});
+export type RowView = z.infer<typeof RowViewSchema>;
+
+/** Preview row additionally carries the original cells for original-vs-interpreted display. */
+export const MappingPreviewRowSchema = RowViewSchema.extend({ rawCells: z.array(z.string()) });
+export type MappingPreviewRow = z.infer<typeof MappingPreviewRowSchema>;
+
+export const ImportCountsSchema = z.object({
+  imported: z.number().int().nonnegative(),
+  valid: z.number().int().nonnegative(),
+  invalid: z.number().int().nonnegative(),
+  excluded: z.number().int().nonnegative()
+});
+export type ImportCounts = z.infer<typeof ImportCountsSchema>;
+
+export const SideControlReportSchema = z.object({
+  importedCents: CentsSchema,
+  controlCents: CentsSchema.nullable(),
+  varianceCents: z.number().int().nullable(),
+  status: CompletenessStatusSchema
+});
+export type SideControlReport = z.infer<typeof SideControlReportSchema>;
+
+export const ImportConfigSchema = z.object({
+  side: SideSchema,
+  path: LocalPathSchema,
+  kind: InputKindSchema,
+  sheetName: z.string().nullable(),
+  headerRow: z.number().int().positive(),
+  dataStartRow: z.number().int().positive(),
+  dataEndRow: z.number().int().positive().nullable(),
+  excludedRows: z.array(z.number().int().positive()).max(20_000),
+  mapping: ColumnMappingSchema,
+  scope: ProjectScopeSchema,
+  options: NormaliseOptionsSchema,
+  controlTotalText: z.string().max(64).nullable()
+});
+export type ImportConfig = z.infer<typeof ImportConfigSchema>;
+
+/** Full import summary returned to the renderer (canonical rows stay in main). */
+export const ImportSummarySchema = z.object({
+  side: SideSchema,
+  kind: InputKindSchema,
+  fileName: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+  sha256: z.string().length(64),
+  sheetName: z.string().nullable(),
+  header: z.array(z.string()),
+  rows: z.array(RowViewSchema),
+  counts: ImportCountsSchema,
+  control: SideControlReportSchema,
+  warnings: z.array(RowIssueSchema)
+});
+export type ImportSummary = z.infer<typeof ImportSummarySchema>;
+
+export const MappingPreviewSchema = z.object({
+  sheetName: z.string().nullable(),
+  header: z.array(z.string()),
+  rows: z.array(MappingPreviewRowSchema),
+  counts: ImportCountsSchema,
+  control: SideControlReportSchema
+});
+export type MappingPreview = z.infer<typeof MappingPreviewSchema>;
+
+/* import:* request/response schemas */
+export const ImportInspectRequestSchema = z.object({
+  side: SideSchema,
+  path: LocalPathSchema,
+  kind: InputKindSchema.optional(),
+  sheetName: z.string().optional()
+});
+export const ImportInspectResponseSchema = resultSchema(InspectResultSchema);
+
+export const ImportPreviewRequestSchema = z.object({ config: ImportConfigSchema, limit: z.number().int().positive().max(500).optional() });
+export const ImportPreviewResponseSchema = resultSchema(MappingPreviewSchema);
+
+export const ImportRunRequestSchema = z.object({ requestId: IdSchema, config: ImportConfigSchema });
+export const ImportRunResponseSchema = resultSchema(ImportSummarySchema);
+
+export const ImportCancelRequestSchema = z.object({ requestId: IdSchema });
+
+export type ImportInspectRequest = z.infer<typeof ImportInspectRequestSchema>;
+export type ImportPreviewRequest = z.infer<typeof ImportPreviewRequestSchema>;
+export type ImportRunRequest = z.infer<typeof ImportRunRequestSchema>;
+export type ImportCancelRequest = z.infer<typeof ImportCancelRequestSchema>;
+
 /* Channel registry: request + response schema per channel. The preload uses this
  * to validate both directions; the main process re-validates requests. */
 export const IPC_CONTRACTS = {
@@ -266,7 +462,11 @@ export const IPC_CONTRACTS = {
   [IPC_CHANNELS.projectCreate]: { request: ProjectCreateRequestSchema, response: ProjectCreateResponseSchema },
   [IPC_CHANNELS.projectOpen]: { request: ProjectOpenRequestSchema, response: ProjectOpenResponseSchema },
   [IPC_CHANNELS.projectClose]: { request: z.undefined(), response: VoidResultSchema },
-  [IPC_CHANNELS.projectGetState]: { request: z.undefined(), response: ProjectStateSchema }
+  [IPC_CHANNELS.projectGetState]: { request: z.undefined(), response: ProjectStateSchema },
+  [IPC_CHANNELS.importInspect]: { request: ImportInspectRequestSchema, response: ImportInspectResponseSchema },
+  [IPC_CHANNELS.importPreview]: { request: ImportPreviewRequestSchema, response: ImportPreviewResponseSchema },
+  [IPC_CHANNELS.importRun]: { request: ImportRunRequestSchema, response: ImportRunResponseSchema },
+  [IPC_CHANNELS.importCancel]: { request: ImportCancelRequestSchema, response: VoidResultSchema }
 } as const;
 
 export type IpcContracts = typeof IPC_CONTRACTS;

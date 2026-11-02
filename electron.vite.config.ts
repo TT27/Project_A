@@ -14,7 +14,12 @@ export default defineConfig({
     resolve: { alias: aliases },
     build: {
       sourcemap: true,
-      rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts') } }
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          importWorker: resolve(__dirname, 'src/main/importWorker.ts')
+        }
+      }
     }
   },
   preload: {

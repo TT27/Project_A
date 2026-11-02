@@ -5,6 +5,14 @@
  */
 import type {
   AppInfo,
+  ImportCancelRequest,
+  ImportInspectRequest,
+  ImportPreviewRequest,
+  ImportProgress,
+  ImportRunRequest,
+  ImportSummary,
+  InspectResult,
+  MappingPreview,
   MenuAction,
   NativeTheme,
   PickedFile,
@@ -41,6 +49,13 @@ export interface StatementDeskApi {
     open(path: string): Promise<Result<ProjectSummary>>;
     close(): Promise<Result<null>>;
     getState(): Promise<ProjectState>;
+  };
+  readonly imports: {
+    inspect(request: ImportInspectRequest): Promise<Result<InspectResult>>;
+    preview(request: ImportPreviewRequest): Promise<Result<MappingPreview>>;
+    run(request: ImportRunRequest): Promise<Result<ImportSummary>>;
+    cancel(request: ImportCancelRequest): Promise<Result<null>>;
+    onProgress(listener: (progress: ImportProgress) => void): Unsubscribe;
   };
 }
 

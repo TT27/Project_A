@@ -2,6 +2,7 @@
  * IPC handler registration. Every handler validates its arguments against the
  * shared Zod contract before doing any work, independent of the preload's own check.
  */
+import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { app, dialog, ipcMain, nativeTheme, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
@@ -10,15 +11,60 @@ import {
   APP_NAME,
   IPC_CHANNELS,
   IPC_CONTRACTS,
+  IPC_EVENTS,
   PROJECT_FILE_EXTENSION,
   type AppInfo,
   type ContractChannel,
+  type ErrorInfo,
+  type ImportSummary,
+  type InspectResult,
+  type MappingPreview,
   type PickedFile,
   type ProjectState,
+  type ProjectSummary,
   type RequestOf,
-  type ResponseOf
+  type ResponseOf,
+  type RowView
 } from '@shared/contracts';
+import type { ImportResult, NormalisedRow } from '../import/types';
+import { ImportError } from '../import/types';
+import { runImportJob, cancelImportJob } from './importService';
+import { importSession } from './session';
+import { projectStore, PROJECT_SCHEMA_VERSION } from './projectStore';
 import { readRecentProjects } from './recent';
+
+function failureFrom(err: unknown): { ok: false; error: ErrorInfo } {
+  if (err instanceof ImportError) return { ok: false, error: { code: err.code, message: err.message } };
+  const message = err instanceof Error ? err.message : 'An unexpected error occurred';
+  return { ok: false, error: { code: 'UNEXPECTED', message } };
+}
+
+function toRowView(row: NormalisedRow): RowView {
+  return {
+    sourceRow: row.sourceRow,
+    status: row.status,
+    ...(row.excludedReason === undefined ? {} : { excludedReason: row.excludedReason }),
+    warnings: row.warnings,
+    errors: row.errors,
+    interpreted: row.interpreted
+  };
+}
+
+function toSummary(result: ImportResult): ImportSummary {
+  return {
+    side: result.side,
+    kind: result.kind,
+    fileName: result.fileName,
+    sizeBytes: result.sizeBytes,
+    sha256: result.sha256,
+    sheetName: result.sheetName,
+    header: result.header,
+    rows: result.rows.map(toRowView),
+    counts: result.counts,
+    control: result.control,
+    warnings: result.warnings
+  };
+}
 
 export class IpcArgumentError extends Error {
   constructor(channel: string, detail: string) {
@@ -143,11 +189,79 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     return result.canceled || !result.filePath ? null : { path: result.filePath };
   });
 
-  // Project persistence arrives in Phase 4. Until then the handlers answer honestly
-  // with a typed error rather than pretending to succeed.
-  const notYetAvailable = { ok: false as const, error: { code: 'NOT_IMPLEMENTED', message: 'Project persistence is not available in this build yet.' } };
-  handle(IPC_CHANNELS.projectCreate, () => notYetAvailable);
-  handle(IPC_CHANNELS.projectOpen, () => notYetAvailable);
-  handle(IPC_CHANNELS.projectClose, () => ({ ok: true as const, value: null }));
-  handle(IPC_CHANNELS.projectGetState, (): ProjectState => ({ project: null }));
+  // Phase 3 keeps the open project in memory so the Setup -> Import -> Validation
+  // flow works end to end. Phase 4 backs project.create/open with the SQLite
+  // repository (writing/reading the .statementdesk file at `path`).
+  handle(IPC_CHANNELS.projectCreate, (request) => {
+    const now = new Date().toISOString();
+    const summary: ProjectSummary = {
+      projectId: randomUUID(),
+      path: request.path,
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      setup: request.setup,
+      createdAt: now,
+      updatedAt: now
+    };
+    projectStore.set(summary);
+    importSession.bindProject(summary.projectId);
+    return { ok: true as const, value: summary };
+  });
+
+  handle(IPC_CHANNELS.projectOpen, () => ({
+    ok: false as const,
+    error: { code: 'NOT_IMPLEMENTED', message: 'Opening saved projects becomes available once persistence lands.' }
+  }));
+
+  handle(IPC_CHANNELS.projectClose, () => {
+    projectStore.clear();
+    importSession.clear();
+    return { ok: true as const, value: null };
+  });
+
+  handle(IPC_CHANNELS.projectGetState, (): ProjectState => ({ project: projectStore.get() }));
+
+  /* ------------------------- Import (worker-based) ------------------------- */
+
+  handle(IPC_CHANNELS.importInspect, async (request) => {
+    try {
+      const result = await runImportJob<InspectResult>(`inspect:${randomUUID()}`, {
+        op: 'inspect',
+        payload: { path: request.path, kind: request.kind, sheetName: request.sheetName }
+      });
+      return { ok: true as const, value: result };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  handle(IPC_CHANNELS.importPreview, async (request) => {
+    try {
+      const result = await runImportJob<MappingPreview>(`preview:${randomUUID()}`, {
+        op: 'preview',
+        payload: { config: request.config, limit: request.limit }
+      });
+      return { ok: true as const, value: result };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  handle(IPC_CHANNELS.importRun, async (request) => {
+    const { requestId, config } = request;
+    try {
+      const result = await runImportJob<ImportResult>(requestId, { op: 'run', payload: { config } }, (fraction) => {
+        ctx.getWindow()?.webContents.send(IPC_EVENTS.importProgress, { requestId, side: config.side, fraction });
+      });
+      importSession.bindProject(config.scope.projectId);
+      importSession.set(config.side, config, result);
+      return { ok: true as const, value: toSummary(result) };
+    } catch (err) {
+      return failureFrom(err);
+    }
+  });
+
+  handle(IPC_CHANNELS.importCancel, (request) => {
+    cancelImportJob(request.requestId);
+    return { ok: true as const, value: null };
+  });
 }

@@ -11,6 +11,7 @@ import {
   MenuActionSchema,
   NativeThemeSchema,
   LocalPathSchema,
+  ImportProgressSchema,
   type ContractChannel,
   type RequestOf,
   type ResponseOf
@@ -85,12 +86,20 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
       open: (path) => invoke(IPC_CHANNELS.projectOpen, { path }),
       close: () => invoke(IPC_CHANNELS.projectClose, undefined),
       getState: () => invoke(IPC_CHANNELS.projectGetState, undefined)
+    },
+    imports: {
+      inspect: (request) => invoke(IPC_CHANNELS.importInspect, request),
+      preview: (request) => invoke(IPC_CHANNELS.importPreview, request),
+      run: (request) => invoke(IPC_CHANNELS.importRun, request),
+      cancel: (request) => invoke(IPC_CHANNELS.importCancel, request),
+      onProgress: makeSubscriber(ipc, IPC_EVENTS.importProgress, ImportProgressSchema)
     }
   };
   // Freeze so the renderer cannot monkey-patch the bridge.
   Object.freeze(api.app);
   Object.freeze(api.dialog);
   Object.freeze(api.project);
+  Object.freeze(api.imports);
   return Object.freeze(api);
 }
 
@@ -98,5 +107,6 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
 export const EXPECTED_API_SURFACE: Record<keyof StatementDeskApi, readonly string[]> = {
   app: ['getInfo', 'getRecentProjects', 'getPendingOpenFile', 'onMenuAction', 'onOpenFileRequested', 'onThemeChanged'],
   dialog: ['pickInputFile', 'pickProjectPath', 'pickExportPath'],
-  project: ['create', 'open', 'close', 'getState']
+  project: ['create', 'open', 'close', 'getState'],
+  imports: ['inspect', 'preview', 'run', 'cancel', 'onProgress']
 };

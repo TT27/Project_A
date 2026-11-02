@@ -40,5 +40,5 @@ test('renderer has no Node access and the bridge is narrow', async () => {
   });
   expect(probe.hasRequire).toBe('undefined');
   expect(probe.hasProcess).toBe('undefined');
-  expect(probe.bridgeKeys).toEqual(['app', 'dialog', 'project']);
+  expect(probe.bridgeKeys).toEqual(['app', 'dialog', 'imports', 'project']);
 });
