@@ -12,7 +12,7 @@ test.beforeAll(async () => {
   app = await electron.launch({
     // Launch the project directory so Electron resolves package.json (name/version/main).
     args: [join(__dirname, '..', '..'), '--no-sandbox'],
-    env: { ...process.env, NODE_ENV: 'production' }
+    env: { ...(process.env as Record<string, string>), NODE_ENV: 'production' }
   });
   page = await app.firstWindow();
 });
