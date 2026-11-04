@@ -1,6 +1,6 @@
 # StatementDesk v0.1.0 — Final Implementation Report
 
-Local-first desktop app that reconciles a supplier statement against an AP ledger export. Built per `SPEC_ORIGINAL.md`. This report records what is **completed**, **partial**, **blocked**, and **unverified**.
+Local-first desktop app that reconciles a supplier statement against an AP ledger export. This report records what is **completed**, **partial**, **blocked**, and **unverified**.
 
 ## 1. Architecture
 
@@ -27,7 +27,7 @@ Security: `contextIsolation` on, `nodeIntegration` off, `sandbox` on, `webviewTa
 - **Financial domain** — signed integer cents throughout (no float currency maths); AUD only; invoices positive, credit notes negative. Deterministic `compareOpenItems` implements matching Rules 1–6; duplicates/ambiguous candidates are surfaced, never auto-matched. Control totals per side + difference. `ENGINE_VERSION` stamped on runs.
 - **Import** — CSV + XLSX (sheet/header/range selection), mapping profiles, worker-based processing, per-row diagnostics. Every imported row remains traceable to its source row.
 - **Persistence** — SQLite with migrations; reconciliation runs are immutable; review events are append-only; projects reopen with results and notes intact; `.statementdesk` association; integrity check refuses corrupted files; `db.backup`.
-- **Reports/exports** — XLSX workbook (Summary, Exceptions, Matched, ImportedStatement, ImportedLedger, Exclusions, ImportSettings) with numeric money cells (2-dp display) and text identifiers; Exceptions CSV with the exact spec §9 columns; self-contained printable HTML (no scripts/external resources). Formula injection neutralised (leading `= + - @` prefixed with `'`) without losing the DB-preserved value; HTML fully escaped; precise "No differences found within the imported data." wording.
+- **Reports/exports** — XLSX workbook (Summary, Exceptions, Matched, ImportedStatement, ImportedLedger, Exclusions, ImportSettings) with numeric money cells (2-dp display) and text identifiers; Exceptions CSV with the fixed column set; self-contained printable HTML (no scripts/external resources). Formula injection neutralised (leading `= + - @` prefixed with `'`) without losing the DB-preserved value; HTML fully escaped; precise "No differences found within the imported data." wording.
 - **UX** — all 8 screens; Home "Try sample" wired to `app.openSample`; offline Feedback & diagnostics (preview before save; diagnostics contain only app/OS version, row counts, error codes — no customer data; no fictional support URL). macOS design language, keyboard accessible, accurate failure states.
 
 ## 3. Tests executed + results (all real)
@@ -65,7 +65,7 @@ Statement total **286000c** (AUD 2,860.00), ledger total **253300c** (AUD 2,533.
 4. SHA-256 checksums of the produced installers.
 5. Independent end-user validation.
 
-Per the spec's Definition of Done, these external release gates are **not** represented as completed.
+Per the product's Definition of Done, these external release gates are **not** represented as completed.
 
 ## 9. Exact commands
 

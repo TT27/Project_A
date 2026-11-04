@@ -1,5 +1,5 @@
 /**
- * XLSX workbook exporter (ExcelJS). Produces the seven sheets mandated by SPEC §9.
+ * XLSX workbook exporter (ExcelJS). Produces the seven standard report sheets.
  * Financial values are written as real numeric cells with a two-decimal display format;
  * identifiers and free text are written as text and formula-guarded. Returns a Buffer.
  */

@@ -32,7 +32,7 @@ export type Side = z.infer<typeof SideSchema>;
 export const DocumentTypeSchema = z.enum(['invoice', 'credit_note']);
 export type DocumentType = z.infer<typeof DocumentTypeSchema>;
 
-/** Signed integer cents with the spec's absolute line limit of 99,999,999,999 cents. */
+/** Signed integer cents with the absolute line limit of 99,999,999,999 cents. */
 export const MAX_ABS_LINE_CENTS = 99_999_999_999;
 export const CentsSchema = z
   .number()
@@ -48,7 +48,7 @@ export const LocalPathSchema = z.string().min(1).max(4096);
 export const IdSchema = z.string().min(1).max(128);
 
 /* ------------------------------------------------------------------------ */
-/* Canonical row and outcomes (section 6 / 7 of the specification)          */
+/* Canonical row and outcomes                                               */
 /* ------------------------------------------------------------------------ */
 
 export const CanonicalRowSchema = z.object({

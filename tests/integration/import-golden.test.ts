@@ -1,7 +1,7 @@
 /**
  * End-to-end Phase 3 import: drive the REAL import layer (loadSource -> parseRows ->
  * normaliseRows, with SHA-256 and control totals) over the golden CSV *and* XLSX
- * fixtures, then feed the canonical rows to the domain engine and assert the spec's
+ * fixtures, then feed the canonical rows to the domain engine and assert the
  * golden results (section 10). This is the Phase 3 exit test.
  */
 import { join } from 'node:path';
@@ -57,7 +57,7 @@ async function importSide(side: Side, kind: 'csv' | 'xlsx', controlTotalText: st
 }
 
 for (const kind of ['csv', 'xlsx'] as const) {
-  describe(`Golden SUP001 import via ${kind.toUpperCase()} (spec section 10)`, () => {
+  describe(`Golden SUP001 import via ${kind.toUpperCase()}`, () => {
     it('reproduces 4 exact matches, 4 exceptions and +327.00 difference', async () => {
       const statement = await importSide('statement', kind);
       const ledger = await importSide('ledger', kind);

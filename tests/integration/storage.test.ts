@@ -83,7 +83,7 @@ describe('Phase 4 persistence (SQLite repository)', () => {
     repo.saveImport(recordFrom(ledger));
     const run = repo.createRun();
 
-    // Golden results (spec section 10).
+    // Golden results.
     expect(run.summary.statementTotalCents).toBe(286000);
     expect(run.summary.ledgerTotalCents).toBe(253300);
     expect(run.summary.differenceCents).toBe(32700);

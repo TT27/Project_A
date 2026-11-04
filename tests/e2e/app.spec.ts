@@ -62,7 +62,7 @@ test('opens the golden sample, reconciles, records a note and persists it across
   expect(created.ok).toBe(true);
   const projectPath = created.value!.path;
 
-  // Run reconciliation and assert the spec's golden summary.
+  // Run reconciliation and assert the golden summary.
   const run = await page.evaluate(async () => {
     const g = globalThis as unknown as { statementdesk: { reconcile: { run: () => Promise<{ ok: boolean; value?: { runId: string; summary: { statementTotalCents: number; ledgerTotalCents: number; differenceCents: number; exceptionCount: number }; outcomes: { outcomeKey: string; category: string }[] } }> } } };
     return g.statementdesk.reconcile.run();

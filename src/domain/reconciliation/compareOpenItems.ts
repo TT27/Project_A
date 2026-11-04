@@ -1,5 +1,5 @@
 /**
- * Deterministic open-item comparison (specification section 7, Rules 1–6).
+ * Deterministic open-item comparison (Rules 1–6).
  * Pure function: output depends only on the row set, never on input order.
  */
 import { ENGINE_VERSION } from '../version';

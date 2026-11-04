@@ -31,7 +31,7 @@ Generated for the Phase 7 exit review. All results below were **actually execute
 
 ### Vitest coverage areas
 - Domain: money, dates, reference normalisation, reconciliation Rules 1–6, control totals, property-based (fast-check) invariants.
-- **Golden test case** (`golden.test.ts`): reproduces the spec fixture exactly — statement 286000c, ledger 253300c, difference **+32700c**, 4 exact + 4 exceptions.
+- **Golden test case** (`golden.test.ts`): reproduces the reference fixture exactly — statement 286000c, ledger 253300c, difference **+32700c**, 4 exact + 4 exceptions.
 - Import: CSV/XLSX parsing, normalisation, diagnostics.
 - Storage (integration): corrupted-file rejection, single-transaction import (no partial rows), multiple immutable runs, migration-preserves-data.
 - Security: `security-config.test.ts` asserts `webPreferences` (contextIsolation, nodeIntegration=false, sandbox, webSecurity, webviewTag=false), CSP, and `setWindowOpenHandler` deny.

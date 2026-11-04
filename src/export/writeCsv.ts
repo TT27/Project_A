@@ -2,7 +2,7 @@
 import { guardText } from './formulaGuard';
 import { centsToFixed, EXCEPTION_CATEGORIES, type ReportModel } from './types';
 
-/** Exact column order mandated by SPEC §9. Do not reorder or rename. */
+/** Fixed column order of the exceptions export. Do not reorder or rename. */
 export const CSV_COLUMNS = [
   'run_id',
   'outcome_id',

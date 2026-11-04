@@ -1,4 +1,4 @@
-/** CSV reader + normalise edge cases (spec section 6 / QA matrix section 11). */
+/** CSV reader + normalise edge cases. */
 import { describe, expect, it } from 'vitest';
 import { parseCsvToGrid } from '../../src/import/csvReader';
 import { parseRows } from '../../src/import/parse';

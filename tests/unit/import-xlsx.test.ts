@@ -1,4 +1,4 @@
-/** XLSX reader + normalise edge cases (spec section 6 / QA matrix section 11). */
+/** XLSX reader + normalise edge cases. */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

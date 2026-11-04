@@ -51,7 +51,7 @@ For each exception you can record a **review decision** and a **note**. Decision
 From the **Export** page you can produce:
 
 - **XLSX workbook** — Summary, Exceptions, Matched, ImportedStatement, ImportedLedger, Exclusions, ImportSettings sheets.
-- **Exceptions CSV** — the exact column set from the specification.
+- **Exceptions CSV** — a fixed, documented column set.
 - **Printable HTML report** — self-contained, no scripts, safe to archive or print to PDF from your browser.
 
 You choose the output location through a native save dialog. Financial values are written as numeric cells with two-decimal display; identifiers are written as text and any value starting with `= + - @` is neutralised against spreadsheet formula injection.

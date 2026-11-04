@@ -4,7 +4,7 @@ import { validateControls } from '../../src/domain/reconciliation/validateContro
 import { formatSignedCents } from '../../src/domain/money';
 import { loadGoldenCsv } from './fixtures';
 
-describe('Golden case: SUP001 @ 2026-09-30 (spec section 10)', () => {
+describe('Golden case: SUP001 @ 2026-09-30', () => {
   const statement = loadGoldenCsv('statement');
   const ledger = loadGoldenCsv('ledger');
   const rows = [...statement, ...ledger];
