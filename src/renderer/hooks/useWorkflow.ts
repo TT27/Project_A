@@ -21,20 +21,30 @@ const EMPTY: WorkflowState = { project: null, files: {}, imports: {}, run: null 
 export function useWorkflow() {
   const [state, setState] = useState<WorkflowState>(EMPTY);
 
-  const setProject = useCallback((project: ProjectSummary, files: Partial<Record<Side, ChosenFile>>) => {
-    // A fresh project clears any imports carried over from a previous one.
-    setState({ project, files, imports: {}, run: null });
+  const setProject = useCallback((
+    project: ProjectSummary,
+    files: Partial<Record<Side, ChosenFile>>,
+    savedImports: ImportSummary[] = [],
+    run: RunView | null = null
+  ) => {
+    const imports: WorkflowState['imports'] = {};
+    for (const summary of savedImports) imports[summary.side] = summary;
+    setState({ project, files, imports, run });
   }, []);
 
   const closeProject = useCallback(() => setState(EMPTY), []);
 
-  const setImport = useCallback((side: Side, summary: ImportSummary) => {
+  const setFile = useCallback((projectId: string, side: Side, file: ChosenFile) => {
+    setState((prev) => prev.project?.projectId === projectId ? { ...prev, files: { ...prev.files, [side]: file } } : prev);
+  }, []);
+
+  const setImport = useCallback((projectId: string, side: Side, summary: ImportSummary) => {
     // A new import invalidates any prior reconciliation run.
-    setState((prev) => ({ ...prev, imports: { ...prev.imports, [side]: summary }, run: null }));
+    setState((prev) => prev.project?.projectId === projectId ? { ...prev, imports: { ...prev.imports, [side]: summary }, run: null } : prev);
   }, []);
 
   const setRun = useCallback((run: RunView) => {
-    setState((prev) => ({ ...prev, run }));
+    setState((prev) => prev.project?.projectId === run.projectId ? { ...prev, run } : prev);
   }, []);
 
   const bothImported = Boolean(state.imports.statement && state.imports.ledger);
@@ -48,10 +58,11 @@ export function useWorkflow() {
       bothImported,
       setProject,
       closeProject,
+      setFile,
       setImport,
       setRun
     }),
-    [state.project, state.files, state.imports, state.run, bothImported, setProject, closeProject, setImport, setRun]
+    [state.project, state.files, state.imports, state.run, bothImported, setProject, closeProject, setFile, setImport, setRun]
   );
 }
 

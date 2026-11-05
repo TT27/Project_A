@@ -44,6 +44,8 @@ export interface RawRow {
   formulaWithoutValue: number[];
   /** Column indices (0-based) whose value was stored numerically (XLSX). */
   numericColumns: number[];
+  /** Column indices (0-based) whose native XLSX date was converted to ISO text. */
+  dateColumns: number[];
 }
 
 export interface RawGrid {

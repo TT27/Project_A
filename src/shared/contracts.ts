@@ -267,13 +267,13 @@ export function resultSchema<T extends z.ZodTypeAny>(value: T) {
 export type Result<T> = { ok: true; value: T } | { ok: false; error: ErrorInfo };
 
 export const ProjectCreateResponseSchema = resultSchema(ProjectSummarySchema);
-export const ProjectOpenResponseSchema = resultSchema(ProjectSummarySchema);
 export const VoidResultSchema = resultSchema(z.null());
 
 /* ------------------------- Phase 5: export, feedback, diagnostics -------- */
 
 export const ExportWriteRequestSchema = z.object({
   kind: ExportKindSchema,
+  runId: IdSchema,
   destPath: LocalPathSchema
 });
 export type ExportWriteRequest = z.infer<typeof ExportWriteRequestSchema>;
@@ -591,7 +591,9 @@ export type OutcomeView = z.infer<typeof OutcomeViewSchema>;
 
 export const RunSettingsSchema = z.object({
   statementControlCents: CentsSchema.nullable(),
-  ledgerControlCents: CentsSchema.nullable()
+  ledgerControlCents: CentsSchema.nullable(),
+  /** Null for runs whose original invalid-row count cannot be established. */
+  invalidRowCount: z.number().int().nonnegative().nullable()
 });
 export type RunSettings = z.infer<typeof RunSettingsSchema>;
 
@@ -601,6 +603,7 @@ export const RunViewSchema = z.object({
   engineVersion: z.string(),
   createdAt: z.string(),
   settings: RunSettingsSchema,
+  hasSourceSnapshot: z.boolean(),
   summary: ReconciliationSummarySchema,
   outcomes: z.array(OutcomeViewSchema)
 });
@@ -616,6 +619,10 @@ export const RunMetaSchema = z.object({
 export type RunMeta = z.infer<typeof RunMetaSchema>;
 
 export const ReconcileRunResponseSchema = resultSchema(RunViewSchema);
+export const ReconcileRunRequestSchema = z.object({
+  projectId: IdSchema,
+  acknowledgeIncompleteDraft: z.boolean().optional()
+}).optional();
 export const ReconcileGetRunRequestSchema = z.object({ runId: IdSchema });
 export const ReconcileListRunsResponseSchema = resultSchema(z.array(RunMetaSchema));
 
@@ -631,6 +638,13 @@ export const ReviewRecordResponseSchema = resultSchema(ReviewEventSchema);
 export const ReviewListRequestSchema = z.object({ runId: IdSchema.optional() });
 export const ReviewListResponseSchema = resultSchema(z.array(ReviewEventSchema));
 export type ReviewRecordRequest = z.infer<typeof ReviewRecordRequestSchema>;
+
+export const ProjectOpenResponseSchema = resultSchema(z.object({
+  project: ProjectSummarySchema,
+  run: RunViewSchema.nullable(),
+  imports: z.array(ImportSummarySchema)
+}));
+export type OpenedProject = Extract<z.infer<typeof ProjectOpenResponseSchema>, { ok: true }>['value'];
 
 /* Channel registry: request + response schema per channel. The preload uses this
  * to validate both directions; the main process re-validates requests. */
@@ -651,7 +665,7 @@ export const IPC_CONTRACTS = {
   [IPC_CHANNELS.importPreview]: { request: ImportPreviewRequestSchema, response: ImportPreviewResponseSchema },
   [IPC_CHANNELS.importRun]: { request: ImportRunRequestSchema, response: ImportRunResponseSchema },
   [IPC_CHANNELS.importCancel]: { request: ImportCancelRequestSchema, response: VoidResultSchema },
-  [IPC_CHANNELS.reconcileRun]: { request: z.undefined(), response: ReconcileRunResponseSchema },
+  [IPC_CHANNELS.reconcileRun]: { request: ReconcileRunRequestSchema, response: ReconcileRunResponseSchema },
   [IPC_CHANNELS.reconcileGetRun]: { request: ReconcileGetRunRequestSchema, response: ReconcileRunResponseSchema },
   [IPC_CHANNELS.reconcileListRuns]: { request: z.undefined(), response: ReconcileListRunsResponseSchema },
   [IPC_CHANNELS.reviewRecord]: { request: ReviewRecordRequestSchema, response: ReviewRecordResponseSchema },

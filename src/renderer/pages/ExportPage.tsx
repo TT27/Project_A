@@ -41,17 +41,19 @@ export function ExportPage({ workflow }: Props) {
     html: { kind: 'idle', message: '' }
   });
 
-  if (!run) {
+  if (!run?.hasSourceSnapshot) {
     return (
       <section className="page">
         <h2>Export</h2>
-        <p className="banner banner-info">Run a reconciliation first. Exports become available once a run exists.</p>
+        <p className="banner banner-info">{run ? 'This saved run predates source snapshots. Run a new reconciliation from Validation to export a report.' : 'Run a reconciliation first. Exports become available once a run exists.'}</p>
       </section>
     );
   }
 
   const supplier = workflow.project?.setup.supplierName ?? 'supplier';
   const cutoff = workflow.project?.setup.cutoffDate ?? '';
+  const runId = run.runId;
+  const isDraft = run.settings.invalidRowCount !== 0;
 
   async function doExport(kind: ExportKind, ext: string) {
     if (!hasApi()) return;
@@ -66,7 +68,7 @@ export function ExportPage({ workflow }: Props) {
       setStatus((s) => ({ ...s, [kind]: { kind: 'busy', message: 'Writing file…' } }));
       const api = getApi().exports;
       const res =
-        kind === 'xlsx' ? await api.writeXlsx(picked.path) : kind === 'csv' ? await api.writeCsv(picked.path) : await api.writeHtml(picked.path);
+        kind === 'xlsx' ? await api.writeXlsx(picked.path, runId) : kind === 'csv' ? await api.writeCsv(picked.path, runId) : await api.writeHtml(picked.path, runId);
       if (res.ok) {
         setStatus((s) => ({ ...s, [kind]: { kind: 'ok', message: `Saved ${res.value.bytes.toLocaleString()} bytes to ${res.value.path}` } }));
       } else {
@@ -85,6 +87,7 @@ export function ExportPage({ workflow }: Props) {
         Reports for <strong>{supplier}</strong> as at {cutoff}. Financial values keep two decimals; identifiers are written as text and
         formula injection is neutralised in spreadsheet and CSV exports.
       </p>
+      {isDraft && <p className="banner banner-warning">This is an incomplete draft. Use Excel or HTML to include the draft status in the report.</p>}
       <div className="export-list">
         {EXPORTS.map((e) => {
           const st = status[e.kind];
@@ -99,7 +102,7 @@ export function ExportPage({ workflow }: Props) {
                   </p>
                 )}
               </div>
-              <button className="btn btn-primary" disabled={st.kind === 'busy'} onClick={() => void doExport(e.kind, e.ext)}>
+              <button className="btn btn-primary" disabled={st.kind === 'busy' || (isDraft && e.kind === 'csv')} onClick={() => void doExport(e.kind, e.ext)}>
                 {st.kind === 'busy' ? 'Exporting…' : 'Export'}
               </button>
             </div>

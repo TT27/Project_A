@@ -33,6 +33,11 @@ describe('CSV reader', () => {
     expect(grid.rows).toHaveLength(2);
   });
 
+  it('rejects unterminated quotes before they can swallow a following invoice', () => {
+    const csv = 'Reference,Type,Date,Amount,Notes\nINV1,Invoice,01/09/2026,100,"unclosed\nINV2,Invoice,02/09/2026,200\n';
+    expect(() => run(csv)).toThrow(/CSV record 2: Quoted field unterminated/);
+  });
+
   it('pads short rows to the widest column count', () => {
     const grid = parseCsvToGrid('A,B,C,D\nINV1,Invoice\n');
     expect(grid.columnCount).toBe(4);

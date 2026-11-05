@@ -78,6 +78,22 @@ async function runBook(mapping: ColumnMapping = MAP, opts: NormaliseOptions = OP
 }
 
 describe('XLSX reader', () => {
+  it('handles native Excel dates alongside Australian text dates and still enforces the cutoff', async () => {
+    const path = join(dir, 'dates.xlsx');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Statement');
+    ws.addRow(['Reference', 'Type', 'Date', 'Amount', 'As of']);
+    ws.addRow(['INV1', 'Invoice', new Date('2026-09-01T00:00:00Z'), 100, new Date('2026-09-30T00:00:00Z')]);
+    ws.addRow(['INV2', 'Invoice', '02/09/2026', 100]);
+    ws.addRow(['INV3', 'Invoice', new Date('2026-10-01T00:00:00Z'), 100]);
+    await wb.xlsx.writeFile(path);
+    const source = await loadSource(path);
+    const parsed = parseRows({ grid: source.gridFor('Statement'), headerRow: 1 });
+    const result = normaliseRows(parsed, 'statement', { ...MAP, asOfDate: 4 }, SCOPE, OPTS);
+    expect(result.canonicalRows.map((row) => row.documentDate)).toEqual(['2026-09-01', '2026-09-02']);
+    expect(result.rows[0]?.warnings).toEqual([]);
+    expect(result.rows[2]?.errors).toEqual([expect.objectContaining({ code: 'DATE_AFTER_CUTOFF' })]);
+  });
   it('lists worksheets and reads saved values only', async () => {
     const source = await loadSource(join(dir, 'book.xlsx'));
     expect(source.kind).toBe('xlsx');

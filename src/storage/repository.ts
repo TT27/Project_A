@@ -157,8 +157,8 @@ export class ProjectRepository {
   ) {}
 
   /** Opens a connection with WAL + foreign keys and steps the schema to latest. */
-  private static connect(path: string): Database.Database {
-    const db = new Database(path);
+  private static connect(path: string, fileMustExist = false): Database.Database {
+    const db = new Database(path, { fileMustExist });
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
     db.pragma('busy_timeout = 5000');
@@ -203,7 +203,7 @@ export class ProjectRepository {
   static open(path: string): ProjectRepository {
     let db: Database.Database;
     try {
-      db = ProjectRepository.connect(path);
+      db = ProjectRepository.connect(path, true);
     } catch (err) {
       throw new StorageError('UNREADABLE_PROJECT', `The project could not be opened: ${(err as Error).message}`);
     }
@@ -333,40 +333,38 @@ export class ProjectRepository {
     return rows.map(rowToCanonical);
   }
 
-  private controlCents(side: Side): number | null {
-    const row = this.db.prepare('SELECT control_cents FROM sources WHERE project_id = ? AND side = ?').get(this.projectId, side) as
-      | { control_cents: number | null }
-      | undefined;
-    return row?.control_cents ?? null;
-  }
-
-  private fileNameFor(side: Side): string {
-    const row = this.db.prepare('SELECT file_name FROM sources WHERE project_id = ? AND side = ?').get(this.projectId, side) as
-      | { file_name: string }
-      | undefined;
-    return row?.file_name ?? '';
-  }
-
   /** Runs reconciliation and writes an immutable run snapshot. Prior runs are never touched. */
-  createRun(): RunView {
-    if (!this.hasImport('statement') || !this.hasImport('ledger')) {
+  createRun(acknowledgeIncompleteDraft = false): RunView {
+    const runId = this.db.transaction(() => this.persistRun(acknowledgeIncompleteDraft)).immediate();
+    return this.getRun(runId);
+  }
+
+  private persistRun(acknowledgeIncompleteDraft: boolean): string {
+    const sources = this.getSources();
+    const statement = sources.find((source) => source.side === 'statement');
+    const ledger = sources.find((source) => source.side === 'ledger');
+    if (!statement || !ledger) {
       throw new StorageError('MISSING_IMPORT', 'Both a statement and a ledger must be imported before reconciling');
     }
     const projectId = this.projectId;
+    const invalidRowCount = sources.reduce((total, source) => total + (source.counts.invalid ?? 0), 0);
+    if (invalidRowCount > 0 && !acknowledgeIncompleteDraft) {
+      throw new StorageError('DRAFT_ACK_REQUIRED', 'Correct the invalid rows or acknowledge that this reconciliation is an incomplete draft.');
+    }
     const rows = this.canonicalRows();
-    const controls = { statementCents: this.controlCents('statement'), ledgerCents: this.controlCents('ledger') };
+    const controls = { statementCents: statement.controlCents, ledgerCents: ledger.controlCents };
     const controlValidation = validateControls(rows, controls);
     const result = compareOpenItems(rows, { completeness: controlValidation.completeness });
 
     const byId = new Map(rows.map((r) => [r.id, r]));
     const fileNames: Record<Side, string> = {
-      statement: this.fileNameFor('statement'),
-      ledger: this.fileNameFor('ledger')
+      statement: statement.fileName,
+      ledger: ledger.fileName
     };
 
     const runId = randomUUID();
     const now = new Date().toISOString();
-    const settings: RunSettings = { statementControlCents: controls.statementCents, ledgerControlCents: controls.ledgerCents };
+    const settings: RunSettings = { statementControlCents: controls.statementCents, ledgerControlCents: controls.ledgerCents, invalidRowCount };
 
     const outcomeViews: OutcomeView[] = result.outcomes.map((o) => {
       const outcomeKey = serialiseKey(o.key);
@@ -405,40 +403,36 @@ export class ProjectRepository {
       };
     });
 
-    const tx = this.db.transaction(() => {
-      this.db
-        .prepare('INSERT INTO runs (id, project_id, engine_version, created_at, settings_json, summary_json) VALUES (?,?,?,?,?,?)')
-        .run(runId, projectId, ENGINE_VERSION, now, JSON.stringify(settings), JSON.stringify(result.summary));
-      const insertOutcome = this.db.prepare(
-        `INSERT INTO outcomes (id, run_id, outcome_key, category, reference_key, document_type,
+    this.db
+      .prepare('INSERT INTO runs (id, project_id, engine_version, created_at, settings_json, summary_json, sources_json) VALUES (?,?,?,?,?,?,?)')
+      .run(runId, projectId, ENGINE_VERSION, now, JSON.stringify(settings), JSON.stringify(result.summary), JSON.stringify(sources));
+    const insertOutcome = this.db.prepare(
+      `INSERT INTO outcomes (id, run_id, outcome_key, category, reference_key, document_type,
            statement_cents, ledger_cents, difference_cents, reason_codes_json, detail_json)
          VALUES (@id, @run_id, @outcome_key, @category, @reference_key, @document_type,
            @statement_cents, @ledger_cents, @difference_cents, @reason_codes_json, @detail_json)`
-      );
-      for (const o of outcomeViews) {
-        insertOutcome.run({
-          id: o.id,
-          run_id: runId,
-          outcome_key: o.outcomeKey,
-          category: o.category,
-          reference_key: o.referenceKey,
-          document_type: o.documentType,
-          statement_cents: o.statementCents,
-          ledger_cents: o.ledgerCents,
-          difference_cents: o.differenceCents,
-          reason_codes_json: JSON.stringify(o.reasonCodes),
-          detail_json: JSON.stringify({ statementDate: o.statementDate, ledgerDate: o.ledgerDate, rows: o.rows })
-        });
-      }
-    });
-    tx();
-
-    return this.getRun(runId);
+    );
+    for (const o of outcomeViews) {
+      insertOutcome.run({
+        id: o.id,
+        run_id: runId,
+        outcome_key: o.outcomeKey,
+        category: o.category,
+        reference_key: o.referenceKey,
+        document_type: o.documentType,
+        statement_cents: o.statementCents,
+        ledger_cents: o.ledgerCents,
+        difference_cents: o.differenceCents,
+        reason_codes_json: JSON.stringify(o.reasonCodes),
+        detail_json: JSON.stringify({ statementDate: o.statementDate, ledgerDate: o.ledgerDate, rows: o.rows })
+      });
+    }
+    return runId;
   }
 
   getRun(runId: string): RunView {
-    const run = this.db.prepare('SELECT * FROM runs WHERE id = ? AND project_id = ?').get(runId, this.projectId) as
-      | { id: string; project_id: string; engine_version: string; created_at: string; settings_json: string; summary_json: string }
+    const run = this.db.prepare('SELECT id, project_id, engine_version, created_at, settings_json, summary_json, sources_json IS NOT NULL AS has_sources FROM runs WHERE id = ? AND project_id = ?').get(runId, this.projectId) as
+      | { id: string; project_id: string; engine_version: string; created_at: string; settings_json: string; summary_json: string; has_sources: number }
       | undefined;
     if (!run) throw new StorageError('RUN_NOT_FOUND', 'The requested reconciliation run was not found');
 
@@ -478,12 +472,14 @@ export class ProjectRepository {
     // Stable ordering: by reference key then category for a deterministic table.
     outcomes.sort((a, b) => a.referenceKey.localeCompare(b.referenceKey) || a.category.localeCompare(b.category));
 
+    const settings = JSON.parse(run.settings_json) as Omit<RunSettings, 'invalidRowCount'> & Partial<Pick<RunSettings, 'invalidRowCount'>>;
     return {
       runId: run.id,
       projectId: run.project_id,
       engineVersion: run.engine_version,
       createdAt: run.created_at,
-      settings: JSON.parse(run.settings_json) as RunSettings,
+      settings: { ...settings, invalidRowCount: settings.invalidRowCount ?? null },
+      hasSourceSnapshot: Boolean(run.has_sources),
       summary: JSON.parse(run.summary_json) as ReconciliationSummaryView,
       outcomes
     };
@@ -491,7 +487,7 @@ export class ProjectRepository {
 
   listRuns(): RunMeta[] {
     const runs = this.db
-      .prepare('SELECT id, engine_version, created_at, summary_json FROM runs WHERE project_id = ? ORDER BY created_at DESC')
+      .prepare('SELECT id, engine_version, created_at, summary_json FROM runs WHERE project_id = ? ORDER BY created_at DESC, rowid DESC')
       .all(this.projectId) as { id: string; engine_version: string; created_at: string; summary_json: string }[];
     return runs.map((r) => {
       const summary = JSON.parse(r.summary_json) as ReconciliationSummaryView;
@@ -506,7 +502,7 @@ export class ProjectRepository {
   }
 
   latestRun(): RunView | null {
-    const run = this.db.prepare('SELECT id FROM runs WHERE project_id = ? ORDER BY created_at DESC LIMIT 1').get(this.projectId) as
+    const run = this.db.prepare('SELECT id FROM runs WHERE project_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1').get(this.projectId) as
       | { id: string }
       | undefined;
     return run ? this.getRun(run.id) : null;
@@ -634,6 +630,17 @@ export class ProjectRepository {
       counts: JSON.parse(r.counts_json) as Record<string, number>,
       importedAt: r.imported_at
     }));
+  }
+
+  getRunSources(runId: string): SourceInfo[] {
+    const run = this.db.prepare('SELECT sources_json FROM runs WHERE id = ? AND project_id = ?').get(runId, this.projectId) as
+      | { sources_json: string | null }
+      | undefined;
+    if (!run) throw new StorageError('RUN_NOT_FOUND', 'The requested reconciliation run was not found');
+    if (run.sources_json === null) {
+      throw new StorageError('RUN_SOURCES_UNAVAILABLE', 'This run predates source snapshots. Run a new reconciliation to export a report.');
+    }
+    return JSON.parse(run.sources_json) as SourceInfo[];
   }
 
   /** The canonical (included) rows for one side, as imported — used for the ImportedStatement/ImportedLedger sheets. */

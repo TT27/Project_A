@@ -18,6 +18,7 @@ interface CellRead {
   /** True when the (formula or value) cell carries a usable scalar value. */
   hasValue: boolean;
   isNumeric: boolean;
+  isDate?: boolean;
 }
 
 function scalarToText(value: ExcelJS.CellValue): string {
@@ -44,7 +45,7 @@ function readCell(cell: ExcelJS.Cell): CellRead {
         return { text: '', isFormula: true, hasValue: false, isNumeric: false };
       }
       const text = scalarToText(result);
-      return { text, isFormula: true, hasValue: text !== '', isNumeric: typeof result === 'number' };
+      return { text, isFormula: true, hasValue: text !== '', isNumeric: typeof result === 'number', isDate: result instanceof Date };
     }
     if ('richText' in raw) {
       const text = raw.richText.map((r) => r.text).join('');
@@ -59,7 +60,7 @@ function readCell(cell: ExcelJS.Cell): CellRead {
     }
     if (raw instanceof Date) {
       const text = scalarToText(raw);
-      return { text, isFormula: false, hasValue: true, isNumeric: false };
+      return { text, isFormula: false, hasValue: true, isNumeric: false, isDate: true };
     }
     return { text: '', isFormula: false, hasValue: false, isNumeric: false };
   }
@@ -84,6 +85,7 @@ function buildGrid(worksheet: ExcelJS.Worksheet): RawGrid {
     const formulaColumns: number[] = [];
     const formulaWithoutValue: number[] = [];
     const numericColumns: number[] = [];
+    const dateColumns: number[] = [];
     for (let c = 1; c <= columnCount; c++) {
       const read = readCell(row.getCell(c));
       cells[c - 1] = read.text;
@@ -92,6 +94,7 @@ function buildGrid(worksheet: ExcelJS.Worksheet): RawGrid {
         if (!read.hasValue) formulaWithoutValue.push(c - 1);
       }
       if (read.isNumeric) numericColumns.push(c - 1);
+      if (read.isDate) dateColumns.push(c - 1);
     }
     rows.push({
       index: rowNumber,
@@ -99,7 +102,8 @@ function buildGrid(worksheet: ExcelJS.Worksheet): RawGrid {
       hidden: row.hidden === true,
       formulaColumns,
       formulaWithoutValue,
-      numericColumns
+      numericColumns,
+      dateColumns
     });
   });
 

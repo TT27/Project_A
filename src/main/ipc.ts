@@ -11,6 +11,8 @@ import { app, dialog, ipcMain, nativeTheme, type BrowserWindow, type IpcMainInvo
 import { ENGINE_VERSION } from '@domain/version';
 import {
   APP_NAME,
+  ImportSummarySchema,
+  ProjectOpenResponseSchema,
   IPC_CHANNELS,
   IPC_CONTRACTS,
   IPC_EVENTS,
@@ -25,7 +27,8 @@ import {
   type ProjectState,
   type RequestOf,
   type ResponseOf,
-  type RowView
+  type RowView,
+  type Side
 } from '@shared/contracts';
 import type { ImportConfig, ImportResult, NormalisedRow } from '../import/types';
 import { ImportError } from '../import/types';
@@ -39,7 +42,7 @@ import { readRecentProjects, addRecentProject } from './recent';
 
 function failureFrom(err: unknown): { ok: false; error: ErrorInfo } {
   if (err instanceof ImportError || err instanceof StorageError) return { ok: false, error: { code: err.code, message: err.message } };
-  const message = err instanceof Error ? err.message : 'An unexpected error occurred';
+  const message = err instanceof Error ? err.message.slice(0, 2000) : 'An unexpected error occurred';
   return { ok: false, error: { code: 'UNEXPECTED', message } };
 }
 
@@ -109,6 +112,7 @@ function handle<C extends ContractChannel>(channel: C, handler: Handler<C>): voi
 export interface IpcContext {
   getWindow(): BrowserWindow | null;
   takePendingOpenFile(): string | null;
+  refreshRecentProjects?(): Promise<void>;
 }
 
 function inputKind(path: string): NonNullable<PickedFile>['kind'] | null {
@@ -119,6 +123,17 @@ function inputKind(path: string): NonNullable<PickedFile>['kind'] | null {
 }
 
 export function registerIpcHandlers(ctx: IpcContext): void {
+  let projectSelection = 0;
+  let recentUpdate = Promise.resolve();
+  const pendingImports = new Map<Side, symbol>();
+
+  function rememberProject(path: string): void {
+    recentUpdate = recentUpdate.then(async () => {
+      await addRecentProject(path);
+      await ctx.refreshRecentProjects?.();
+    }).catch((err: unknown) => console.warn('Could not update recent projects', err));
+  }
+
   handle(IPC_CHANNELS.appGetInfo, (): AppInfo => ({
     name: APP_NAME,
     version: app.getVersion(),
@@ -140,8 +155,10 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   // CSV samples into it, so the e2e can drive a full reconcile/review flow without
   // native dialogs. Reuses the exact same create + import + persist path as production.
   handle(IPC_CHANNELS.appOpenSample, async () => {
+    const selection = ++projectSelection;
+    let pendingRepo: ProjectRepository | undefined;
     try {
-      const samplesDir = join(app.getAppPath(), 'samples');
+      const samplesDir = join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'samples');
       const projectPath = join(mkdtempSync(join(tmpdir(), 'statementdesk-sample-')), `golden${PROJECT_FILE_EXTENSION}`);
       const repo = ProjectRepository.create(projectPath, {
         projectName: 'Golden sample',
@@ -151,8 +168,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         currency: 'AUD',
         comparableBalancesConfirmed: true
       });
-      projectStore.set(repo);
-      importSession.bindProject(repo.projectId);
+      pendingRepo = repo;
 
       const mapping = { reference: 1, documentType: 2, documentDate: 3, outstanding: 4, supplier: 0, currency: -1, asOfDate: -1 };
       const sides: { side: 'statement' | 'ledger'; file: string; dateFormat: 'DD/MM/YYYY' | 'YYYY-MM-DD' }[] = [
@@ -175,7 +191,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
           controlTotalText: null
         };
         const result = await runImportJob<ImportResult>(`sample:${randomUUID()}`, { op: 'run', payload: { config } });
-        importSession.set(s.side, config, result);
+        if (selection !== projectSelection) throw new StorageError('PROJECT_CHANGED', 'The sample was cancelled because the active project changed.');
         repo.saveImport({
           config,
           fileName: result.fileName,
@@ -190,10 +206,16 @@ export function registerIpcHandlers(ctx: IpcContext): void {
           canonicalRows: result.canonicalRows
         });
       }
-      await addRecentProject(projectPath);
-      return { ok: true as const, value: repo.getProject() };
+      const project = repo.getProject();
+      projectStore.set(repo);
+      pendingRepo = undefined;
+      importSession.bindProject(project.projectId);
+      rememberProject(projectPath);
+      return { ok: true as const, value: project };
     } catch (err) {
       return failureFrom(err);
+    } finally {
+      pendingRepo?.close();
     }
   });
 
@@ -257,31 +279,56 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   });
 
   // SQLite-backed: create writes a new .statementdesk file at `path`; open reads one.
-  handle(IPC_CHANNELS.projectCreate, async (request) => {
+  handle(IPC_CHANNELS.projectCreate, (request) => {
     try {
       const repo = ProjectRepository.create(request.path, request.setup);
       projectStore.set(repo);
+      projectSelection += 1;
       importSession.bindProject(repo.projectId);
-      await addRecentProject(request.path);
+      rememberProject(request.path);
       return { ok: true as const, value: repo.getProject() };
     } catch (err) {
       return failureFrom(err);
     }
   });
 
-  handle(IPC_CHANNELS.projectOpen, async (request) => {
+  handle(IPC_CHANNELS.projectOpen, (request) => {
+    let pendingRepo: ProjectRepository | undefined;
     try {
       const repo = ProjectRepository.open(request.path);
+      pendingRepo = repo;
+      const value = {
+        project: repo.getProject(),
+        run: repo.latestRun(),
+        imports: repo.getSources().map((source) => ({
+          ...source,
+          header: [],
+          rows: [],
+          warnings: [],
+          control: {
+            importedCents: source.importedCents,
+            controlCents: source.controlCents,
+            varianceCents: source.controlCents === null ? null : source.importedCents - source.controlCents,
+            status: source.controlStatus
+          }
+        }))
+      };
+      const response = ProjectOpenResponseSchema.parse({ ok: true, value });
       projectStore.set(repo);
+      pendingRepo = undefined;
+      projectSelection += 1;
       importSession.bindProject(repo.projectId);
-      await addRecentProject(request.path);
-      return { ok: true as const, value: repo.getProject() };
+      rememberProject(request.path);
+      return response;
     } catch (err) {
       return failureFrom(err);
+    } finally {
+      pendingRepo?.close();
     }
   });
 
   handle(IPC_CHANNELS.projectClose, () => {
+    projectSelection += 1;
     projectStore.clear();
     importSession.clear();
     return { ok: true as const, value: null };
@@ -326,32 +373,31 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   handle(IPC_CHANNELS.importRun, async (request) => {
     const { requestId, config } = request;
+    const ticket = Symbol();
     try {
-      const result = await runImportJob<ImportResult>(requestId, { op: 'run', payload: { config } }, (fraction) => {
-        ctx.getWindow()?.webContents.send(IPC_EVENTS.importProgress, { requestId, side: config.side, fraction });
-      });
-      importSession.bindProject(config.scope.projectId);
-      importSession.set(config.side, config, result);
-      // Persist the import (single transaction) so reconciliation reads from the DB.
-      const repo = projectStore.repository();
-      if (repo) {
-        repo.saveImport({
-          config,
-          fileName: result.fileName,
-          kind: result.kind,
-          sha256: result.sha256,
-          sizeBytes: result.sizeBytes,
-          sheetName: result.sheetName,
-          importedCents: result.control.importedCents,
-          controlCents: result.control.controlCents,
-          controlStatus: result.control.status,
-          counts: result.counts,
-          canonicalRows: result.canonicalRows
-        });
+      const repo = projectStore.requireRepo();
+      const project = repo.getProject();
+      const { scope, side } = config;
+      if (scope.projectId !== project.projectId || scope.supplierId !== project.setup.supplierId ||
+          scope.cutoffDate !== project.setup.cutoffDate || scope.currency !== project.setup.currency) {
+        throw new StorageError('PROJECT_CHANGED', 'The import does not belong to the active project.');
       }
-      return { ok: true as const, value: toSummary(result) };
+      pendingImports.set(side, ticket);
+      const isCurrent = () => projectStore.repository() === repo && pendingImports.get(side) === ticket;
+      const result = await runImportJob<ImportResult>(requestId, { op: 'run', payload: { config } }, (fraction) => {
+        if (isCurrent()) ctx.getWindow()?.webContents.send(IPC_EVENTS.importProgress, { requestId, side, fraction });
+      });
+      if (!isCurrent()) {
+        throw new StorageError('IMPORT_SUPERSEDED', 'The active project or import changed before this import finished.');
+      }
+      const summary = ImportSummarySchema.parse(toSummary(result));
+      repo.saveImport({ ...result, config, importedCents: result.control.importedCents, controlCents: result.control.controlCents, controlStatus: result.control.status });
+      importSession.set(side, config, result);
+      return { ok: true as const, value: summary };
     } catch (err) {
       return failureFrom(err);
+    } finally {
+      if (pendingImports.get(config.side) === ticket) pendingImports.delete(config.side);
     }
   });
 
@@ -362,9 +408,13 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   /* --------------------------- Reconcile & review -------------------------- */
 
-  handle(IPC_CHANNELS.reconcileRun, () => {
+  handle(IPC_CHANNELS.reconcileRun, (request) => {
     try {
-      return { ok: true as const, value: projectStore.requireRepo().createRun() };
+      const repo = projectStore.requireRepo();
+      if (request?.projectId && request.projectId !== repo.projectId) {
+        throw new StorageError('PROJECT_CHANGED', 'Open the intended project before running the reconciliation.');
+      }
+      return { ok: true as const, value: repo.createRun(request?.acknowledgeIncompleteDraft) };
     } catch (err) {
       return failureFrom(err);
     }
@@ -421,9 +471,11 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         return { ok: false as const, error: { code: 'UNAUTHORISED_PATH', message: 'Choose a destination with the Save dialog before exporting.' } };
       }
       const repo = projectStore.requireRepo();
-      const run = repo.latestRun();
-      if (!run) return { ok: false as const, error: { code: 'NO_RUN', message: 'Run a reconciliation before exporting.' } };
+      const run = repo.getRun(request.runId);
       const model = buildReport({ repo, run, appVersion: app.getVersion() });
+      if (request.kind === 'csv' && run.settings.invalidRowCount !== 0) {
+        throw new StorageError('DRAFT_CSV_UNAVAILABLE', 'The exceptions CSV cannot show draft status. Choose Excel or HTML for an incomplete draft.');
+      }
 
       let data: Buffer;
       if (request.kind === 'xlsx') data = await buildWorkbookBuffer(model);

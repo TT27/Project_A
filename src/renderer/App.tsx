@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MenuAction } from '@shared/contracts';
 import { Sidebar } from './components/Sidebar';
 import { Toolbar } from './components/Toolbar';
@@ -23,7 +23,9 @@ export function App() {
   useNativeTheme(info?.theme);
   const [page, setPage] = useState<PageId>('home');
   const workflow = useWorkflow();
-  const requestId = useId();
+  const projectSelection = useRef(0);
+  const appliedSelection = useRef(0);
+  const { setProject } = workflow;
   const [running, setRunning] = useState(false);
   const [reviewKey, setReviewKey] = useState<string | null>(null);
 
@@ -46,25 +48,62 @@ export function App() {
     [enabledPages]
   );
 
+  const openProject = useCallback(async (path: string) => {
+    const selection = ++projectSelection.current;
+    try {
+      const opened = await getApi().project.open(path);
+      if (selection < appliedSelection.current) return;
+      if (!opened.ok) {
+        window.alert(opened.error.message);
+        return;
+      }
+      const { project, run, imports } = opened.value;
+      appliedSelection.current = selection;
+      setProject(project, {}, imports, run);
+      setReviewKey(null);
+      setPage(run ? 'results' : 'import');
+    } catch (err) {
+      if (selection === projectSelection.current) window.alert(err instanceof Error ? err.message : 'Could not open the project.');
+    }
+  }, [setProject]);
+
+  useEffect(() => {
+    if (!hasApi()) return;
+    const api = getApi();
+    function openPendingProject() {
+      void api.app.getPendingOpenFile().then((pending) => {
+        if (pending) return openProject(pending.path);
+      }).catch((err: unknown) => window.alert(err instanceof Error ? err.message : 'Could not open the project.'));
+    }
+    const unsubscribe = api.app.onOpenFileRequested(openPendingProject);
+    openPendingProject();
+    return unsubscribe;
+  }, [openProject]);
+
   const pickProject = useCallback(async () => {
     if (!hasApi()) return;
-    const picked = await getApi().dialog.pickProjectPath({ mode: 'open' });
-    if (!picked) return;
-    const opened = await getApi().project.open(picked.path);
-    if (!opened.ok) window.alert(opened.error.message);
-  }, []);
+    try {
+      const picked = await getApi().dialog.pickProjectPath({ mode: 'open' });
+      if (picked) await openProject(picked.path);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not choose a project file.');
+    }
+  }, [openProject]);
 
   const closeProject = useCallback(() => {
+    appliedSelection.current = ++projectSelection.current;
     if (hasApi()) void getApi().project.close();
     workflow.closeProject();
     setPage('home');
   }, [workflow]);
 
-  const runReconcile = useCallback(async () => {
-    if (!hasApi()) return;
+  const runReconcile = useCallback(async (acknowledgeIncompleteDraft: boolean) => {
+    if (!hasApi() || !workflow.project) return;
+    const selection = projectSelection.current;
     setRunning(true);
     try {
-      const res = await getApi().reconcile.run();
+      const res = await getApi().reconcile.run({ projectId: workflow.project.projectId, acknowledgeIncompleteDraft });
+      if (selection < appliedSelection.current) return;
       if (!res.ok) {
         window.alert(res.error.message);
         return;
@@ -78,15 +117,19 @@ export function App() {
 
   const trySample = useCallback(async () => {
     if (!hasApi()) return;
+    const selection = ++projectSelection.current;
     setRunning(true);
     try {
       const res = await getApi().app.openSample();
+      if (selection < appliedSelection.current) return;
       if (!res.ok) {
-        window.alert(res.error.message);
+        if (selection === projectSelection.current) window.alert(res.error.message);
         return;
       }
+      appliedSelection.current = selection;
       workflow.setProject(res.value, {});
-      const runRes = await getApi().reconcile.run();
+      const runRes = await getApi().reconcile.run({ projectId: res.value.projectId });
+      if (selection < appliedSelection.current) return;
       if (runRes.ok) {
         workflow.setRun(runRes.value);
         setPage('results');
@@ -140,14 +183,14 @@ export function App() {
           onNewReconciliation={() => onMenuAction('new-reconciliation')}
           onOpenProject={() => onMenuAction('open-project')}
           onTrySample={() => onMenuAction('try-sample')}
-          onOpenRecent={() => onMenuAction('open-project')}
+          onOpenRecent={(path) => void openProject(path)}
           onHelp={() => onMenuAction('help')}
         />
       );
     }
     if (page === 'setup') return <SetupPage workflow={workflow} onCreated={() => setPage('import')} />;
-    if (page === 'import') return <ImportMappingPage workflow={workflow} requestId={requestId} onBothImported={() => undefined} />;
-    if (page === 'validation') return <ValidationPage workflow={workflow} running={running} onRun={() => void runReconcile()} />;
+    if (page === 'import') return <ImportMappingPage workflow={workflow} />;
+    if (page === 'validation') return <ValidationPage workflow={workflow} running={running} onRun={(acknowledged) => void runReconcile(acknowledged)} />;
     if (page === 'results') return <ResultsPage workflow={workflow} onReview={(key) => { setReviewKey(key); setPage('review'); }} />;
     if (page === 'review') return <ReviewPage workflow={workflow} focusKey={reviewKey} />;
     if (page === 'export') return <ExportPage workflow={workflow} />;

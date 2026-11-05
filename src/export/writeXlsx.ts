@@ -52,7 +52,9 @@ export async function buildWorkbookBuffer(model: ReportModel): Promise<Buffer> {
     ['Exact matches', s.exactMatchCount],
     ['Exceptions', s.exceptionCount],
     ['Unresolved', s.unresolvedCount],
-    ['Completeness', s.completeness]
+    ['Control totals', s.completeness],
+    ['Run status', model.run.settings.invalidRowCount ? 'Incomplete draft' : 'Reconciliation'],
+    ['Invalid rows omitted', model.run.settings.invalidRowCount ?? 'Unknown']
   ];
   for (const [k, v] of kv) {
     const row = summary.addRow([k, typeof v === 'number' ? v : undefined]);

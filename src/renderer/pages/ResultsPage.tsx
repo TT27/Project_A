@@ -63,6 +63,13 @@ export function ResultsPage({ workflow, onReview }: Props) {
         <p className="subhead">Engine {run.engineVersion} · {new Date(run.createdAt).toLocaleString()}</p>
       </header>
 
+      {run.settings.invalidRowCount === null && (
+        <p className="banner banner-warning">This saved run predates source snapshots. Run a new reconciliation from Validation to export a report.</p>
+      )}
+      {!!run.settings.invalidRowCount && (
+        <p className="banner banner-warning"><strong>Incomplete draft.</strong> {run.settings.invalidRowCount} invalid source rows were omitted.</p>
+      )}
+
       <div className="card-grid">
         <div className="card metric">
           <span className="metric-label">Statement total</span>
@@ -85,9 +92,9 @@ export function ResultsPage({ workflow, onReview }: Props) {
           <span className="metric-sub">exact / exceptions</span>
         </div>
         <div className="card metric">
-          <span className="metric-label">Completeness</span>
+          <span className="metric-label">Control totals</span>
           <span className={`metric-value ${s.completeness === 'Verified' ? 'ok' : s.completeness === 'Mismatch' ? 'warn' : ''}`}>{s.completeness}</span>
-          <span className="metric-sub">control totals</span>
+          <span className="metric-sub">compared with imported rows</span>
         </div>
       </div>
 

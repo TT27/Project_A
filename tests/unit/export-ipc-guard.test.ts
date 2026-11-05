@@ -11,15 +11,19 @@ describe('export:write argument validation', () => {
   const schema = IPC_CONTRACTS[IPC_CHANNELS.exportWrite].request;
 
   it('accepts a well-formed request', () => {
-    expect(schema.safeParse({ kind: 'xlsx', destPath: '/tmp/out.xlsx' }).success).toBe(true);
+    expect(schema.safeParse({ kind: 'xlsx', destPath: '/tmp/out.xlsx', runId: 'run-1' }).success).toBe(true);
   });
 
   it('rejects an unknown export kind', () => {
-    expect(schema.safeParse({ kind: 'exe', destPath: '/tmp/out.exe' }).success).toBe(false);
+    expect(schema.safeParse({ kind: 'exe', destPath: '/tmp/out.exe', runId: 'run-1' }).success).toBe(false);
   });
 
   it('rejects a missing destination path', () => {
-    expect(schema.safeParse({ kind: 'csv' }).success).toBe(false);
+    expect(schema.safeParse({ kind: 'csv', runId: 'run-1' }).success).toBe(false);
+  });
+
+  it('rejects a request without an explicit run ID', () => {
+    expect(schema.safeParse({ kind: 'csv', destPath: '/tmp/out.csv' }).success).toBe(false);
   });
 
   it('rejects a non-object payload', () => {

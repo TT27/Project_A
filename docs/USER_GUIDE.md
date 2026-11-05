@@ -56,6 +56,8 @@ From the **Export** page you can produce:
 
 You choose the output location through a native save dialog. Financial values are written as numeric cells with two-decimal display; identifiers are written as text and any value starting with `= + - @` is neutralised against spreadsheet formula injection.
 
+Exports use the inputs saved with the displayed run. Excel and HTML reports label incomplete drafts and show how many invalid rows were omitted. The fixed-format CSV is available for runs with no invalid rows. Older runs without source snapshots remain viewable. Run a new reconciliation from Validation to export a report from a migrated project.
+
 ## 8. Feedback and diagnostics
 
 An **offline** feedback form captures preparation time, review time, usefulness, problems encountered and likelihood to recommend. The optional diagnostics bundle contains only app version, OS version, row counts and error codes — **no customer data**. You preview everything before it is saved to a file you choose. Nothing is transmitted anywhere.

@@ -96,4 +96,12 @@ test('opens the golden sample, reconciles, records a note and persists it across
   }, projectPath);
   expect(reviews.ok).toBe(true);
   expect(reviews.value!.some((r) => r.note === 'Persisted note from e2e' && r.reviewer === 'E2E')).toBe(true);
+
+  const workflow = page.getByRole('navigation', { name: 'Workflow' });
+  await workflow.getByRole('button', { name: 'Setup' }).click();
+  await workflow.getByRole('button', { name: 'Home' }).click();
+  await page.getByTitle(projectPath, { exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Results' })).toBeVisible();
+  await expect(page.locator('.toolbar')).toContainText('Golden sample');
+  await expect(page.getByRole('button', { name: 'Validation' })).toBeEnabled();
 });

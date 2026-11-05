@@ -18,6 +18,7 @@ import type {
   MappingPreview,
   MenuAction,
   NativeTheme,
+  OpenedProject,
   PickedFile,
   PickedPath,
   PickExportPathRequest,
@@ -56,7 +57,7 @@ export interface StatementDeskApi {
   };
   readonly project: {
     create(path: string, setup: ProjectSetup): Promise<Result<ProjectSummary>>;
-    open(path: string): Promise<Result<ProjectSummary>>;
+    open(path: string): Promise<Result<OpenedProject>>;
     close(): Promise<Result<null>>;
     getState(): Promise<ProjectState>;
     saveSettings(settings: ProjectSettingsPatch): Promise<Result<ProjectSummary>>;
@@ -69,7 +70,7 @@ export interface StatementDeskApi {
     onProgress(listener: (progress: ImportProgress) => void): Unsubscribe;
   };
   readonly reconcile: {
-    run(): Promise<Result<RunView>>;
+    run(request?: { projectId: string; acknowledgeIncompleteDraft?: boolean }): Promise<Result<RunView>>;
     getRun(runId: string): Promise<Result<RunView>>;
     listRuns(): Promise<Result<RunMeta[]>>;
   };
@@ -78,9 +79,9 @@ export interface StatementDeskApi {
     list(request?: { runId?: string }): Promise<Result<ReviewEvent[]>>;
   };
   readonly exports: {
-    writeXlsx(destPath: string): Promise<Result<ExportWriteResult>>;
-    writeCsv(destPath: string): Promise<Result<ExportWriteResult>>;
-    writeHtml(destPath: string): Promise<Result<ExportWriteResult>>;
+    writeXlsx(destPath: string, runId: string): Promise<Result<ExportWriteResult>>;
+    writeCsv(destPath: string, runId: string): Promise<Result<ExportWriteResult>>;
+    writeHtml(destPath: string, runId: string): Promise<Result<ExportWriteResult>>;
   };
   readonly diagnostics: {
     build(): Promise<Result<Diagnostics>>;

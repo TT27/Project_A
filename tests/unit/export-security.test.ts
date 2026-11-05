@@ -80,7 +80,8 @@ function model(outcomes: OutcomeView[]): ReportModel {
     projectId: 'p1',
     engineVersion: '1.0.0',
     createdAt: '2026-10-01T00:00:00.000Z',
-    settings: { statementControlCents: null, ledgerControlCents: null },
+    settings: { statementControlCents: null, ledgerControlCents: null, invalidRowCount: 0 },
+    hasSourceSnapshot: true,
     summary: summary(exceptionCount),
     outcomes
   };
