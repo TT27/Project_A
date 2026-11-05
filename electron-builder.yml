@@ -1,0 +1,107 @@
+# electron-builder configuration for StatementDesk v0.1
+# Primary target: macOS (Apple Silicon + Intel). Secondary: Windows x64 NSIS.
+appId: au.statementdesk.app
+productName: StatementDesk
+copyright: Copyright © 2026 StatementDesk
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**/*
+  - package.json
+  - "!**/*.map"
+extraResources:
+  - from: samples
+    to: samples
+    filter: ["**/*"]
+  - from: docs
+    to: docs
+    filter: ["**/*"]
+asar: true
+asarUnpack:
+  - "**/*.node"
+npmRebuild: true
+fileAssociations:
+  - ext: statementdesk
+    name: StatementDesk Project
+    description: StatementDesk reconciliation project
+    role: Editor
+    mimeType: application/x-statementdesk
+    icon: build/icon.icns
+afterSign: build/notarize.cjs
+
+mac:
+  category: public.app-category.finance
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  minimumSystemVersion: "13.0"
+  darkModeSupport: true
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  icon: build/icon.icns
+  # Notarization is performed by build/notarize.cjs only when APPLE_ID,
+  # APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID are set. Signing identity is
+  # discovered from the keychain (CSC_IDENTITY_AUTO_DISCOVERY) or CSC_LINK/CSC_KEY_PASSWORD.
+  notarize: false
+  extendInfo:
+    NSHumanReadableCopyright: Local-first supplier statement reconciliation.
+    LSApplicationCategoryType: public.app-category.finance
+    CFBundleDocumentTypes:
+      - CFBundleTypeName: StatementDesk Project
+        CFBundleTypeExtensions: [statementdesk]
+        CFBundleTypeRole: Editor
+        LSHandlerRank: Owner
+        LSItemContentTypes: [au.statementdesk.project]
+    UTExportedTypeDeclarations:
+      - UTTypeIdentifier: au.statementdesk.project
+        UTTypeDescription: StatementDesk Project
+        UTTypeConformsTo: [public.data, public.database]
+        UTTypeTagSpecification:
+          public.filename-extension: [statementdesk]
+          public.mime-type: application/x-statementdesk
+
+dmg:
+  sign: false
+  title: ${productName} ${version}
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+  window:
+    width: 540
+    height: 400
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-win-${arch}-Setup.${ext}
+  icon: build/icon.ico
+  legalTrademarks: StatementDesk
+  # Code signing: configure CSC_LINK / CSC_KEY_PASSWORD or an Azure Trusted Signing
+  # setup in CI. Unsigned builds are development builds and are labelled as such.
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: StatementDesk
+  artifactName: ${productName}-${version}-win-${arch}-Setup.${ext}
+  license: build/LICENSE-EULA.txt
+
+linux:
+  target: [AppImage]
+  category: Office

@@ -1,0 +1,66 @@
+{
+  "name": "statementdesk",
+  "version": "0.1.0",
+  "productName": "StatementDesk",
+  "description": "Local-first supplier statement reconciliation for Australian accounts payable teams.",
+  "author": {
+    "name": "StatementDesk",
+    "email": "noreply@statementdesk.local"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "./out/main/index.js",
+  "homepage": "./",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "preview": "electron-vite preview",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test",
+    "build": "electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "icons": "node scripts/make-icons.mjs",
+    "samples:xlsx": "node scripts/make-sample-xlsx.mjs",
+    "dist:mac": "npm run build && electron-builder --mac --arm64 --x64",
+    "dist:mac:arm64": "npm run build && electron-builder --mac --arm64",
+    "dist:mac:x64": "npm run build && electron-builder --mac --x64",
+    "dist:win": "npm run build && electron-builder --win --x64"
+  },
+  "dependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^13.0.3",
+    "exceljs": "4.4.0",
+    "papaparse": "5.7.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@electron/notarize": "3.1.2",
+    "@eslint/js": "9.39.2",
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.10.4",
+    "@types/papaparse": "5.5.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "39.8.10",
+    "electron-builder": "26.18.0",
+    "electron-vite": "6.0.0",
+    "eslint": "9.39.2",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "fast-check": "4.10.2",
+    "globals": "16.4.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1",
+    "vite": "7.3.7",
+    "vitest": "4.1.12"
+  }
+}
