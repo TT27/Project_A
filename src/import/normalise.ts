@@ -131,7 +131,7 @@ export function normaliseRows(
     if (mapping.asOfDate >= 0) {
       const asOfText = cellAt(row.cells, mapping.asOfDate).trim();
       if (asOfText !== '') {
-        const asOf = parseDate(asOfText, options.dateFormat);
+        const asOf = parseDate(asOfText, row.dateColumns.includes(mapping.asOfDate) ? 'YYYY-MM-DD' : options.dateFormat);
         if (!asOf.ok) warnings.push({ code: 'AS_OF_DATE_UNPARSED', field: 'asOfDate', message: `As-of date "${asOfText}" could not be parsed` });
         else if (asOf.isoDate !== scope.cutoffDate) warnings.push({ code: 'AS_OF_DATE_DIFFERS', field: 'asOfDate', message: `As-of date ${asOf.isoDate} differs from the project cutoff ${scope.cutoffDate}` });
       }
@@ -150,7 +150,8 @@ export function normaliseRows(
 
     // Date.
     let isoDate: string | null = null;
-    const date = parseDocumentDate(documentDateText, options.dateFormat, scope.cutoffDate);
+    const dateFormat = row.dateColumns.includes(mapping.documentDate) ? 'YYYY-MM-DD' : options.dateFormat;
+    const date = parseDocumentDate(documentDateText, dateFormat, scope.cutoffDate);
     if (!date.ok) errors.push({ code: `DATE_${date.code}`, field: 'documentDate', message: `Document date: ${date.message}` });
     else isoDate = date.isoDate;
 

@@ -16,6 +16,9 @@ function workerPath(): string {
 }
 
 export function runImportJob<T>(requestId: string, job: WorkerJob, onProgress?: (fraction: number) => void): Promise<T> {
+  if (activeWorkers.has(requestId)) {
+    return Promise.reject(new ImportError('IMPORT_IN_PROGRESS', 'An import with this request ID is already running'));
+  }
   return new Promise<T>((resolve, reject) => {
     const worker = new Worker(workerPath(), { workerData: job });
     activeWorkers.set(requestId, worker);
@@ -25,7 +28,7 @@ export function runImportJob<T>(requestId: string, job: WorkerJob, onProgress?: 
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      activeWorkers.delete(requestId);
+      if (activeWorkers.get(requestId) === worker) activeWorkers.delete(requestId);
       void worker.terminate();
       fn();
     };

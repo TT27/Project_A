@@ -4,7 +4,7 @@ import type { Workflow } from '../hooks/useWorkflow';
 
 interface ValidationPageProps {
   workflow: Workflow;
-  onRun: () => void;
+  onRun: (acknowledgeIncompleteDraft: boolean) => void;
   running: boolean;
 }
 
@@ -51,7 +51,11 @@ function SideCard({ side, summary }: { side: Side; summary: ImportSummary }) {
 
 function ErrorTable({ summary }: { summary: ImportSummary }) {
   const invalid = summary.rows.filter((r) => r.status === 'invalid');
-  if (invalid.length === 0) return null;
+  if (invalid.length === 0) {
+    return summary.counts.invalid > 0 ? (
+      <p className="field-hint">Re-import {summary.fileName} to see row-level validation errors.</p>
+    ) : null;
+  }
   return (
     <div className="preview-block">
       <h3 className="subhead">{summary.side === 'statement' ? 'Statement' : 'Ledger'} rows needing attention ({invalid.length})</h3>
@@ -86,7 +90,7 @@ function ErrorTable({ summary }: { summary: ImportSummary }) {
 export function ValidationPage({ workflow, onRun, running }: ValidationPageProps) {
   const statement = workflow.imports.statement;
   const ledger = workflow.imports.ledger;
-  const [draftAck, setDraftAck] = useState(false);
+  const [acknowledgedImports, setAcknowledgedImports] = useState<{ statement: ImportSummary; ledger: ImportSummary } | null>(null);
 
   if (!statement || !ledger) {
     return (
@@ -101,6 +105,7 @@ export function ValidationPage({ workflow, onRun, running }: ValidationPageProps
 
   const invalidCount = statement.counts.invalid + ledger.counts.invalid;
   const hasCritical = invalidCount > 0;
+  const draftAck = acknowledgedImports?.statement === statement && acknowledgedImports.ledger === ledger;
   const canRun = !running && (!hasCritical || draftAck);
 
   return (
@@ -127,7 +132,7 @@ export function ValidationPage({ workflow, onRun, running }: ValidationPageProps
               re-import, or proceed with an incomplete draft that excludes these rows.
             </div>
             <label className="checkbox-field">
-              <input type="checkbox" checked={draftAck} onChange={(e) => setDraftAck(e.target.checked)} />
+              <input type="checkbox" checked={draftAck} onChange={(e) => setAcknowledgedImports(e.target.checked ? { statement, ledger } : null)} />
               <span>Proceed with an incomplete draft (invalid rows will be left out of the comparison).</span>
             </label>
           </>
@@ -135,7 +140,7 @@ export function ValidationPage({ workflow, onRun, running }: ValidationPageProps
           <div className="banner banner-info" role="status">All rows interpreted cleanly. Ready to reconcile.</div>
         )}
         <div className="form-actions">
-          <button type="button" className="btn btn-primary btn-large" onClick={onRun} disabled={!canRun}>
+          <button type="button" className="btn btn-primary btn-large" onClick={() => onRun(draftAck)} disabled={!canRun}>
             {running ? 'Reconciling…' : 'Run reconciliation'}
           </button>
         </div>

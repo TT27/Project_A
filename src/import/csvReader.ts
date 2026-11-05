@@ -16,6 +16,12 @@ export function parseCsvToGrid(content: string): RawGrid {
     dynamicTyping: false
   });
 
+  const quoteError = result.errors.find((error) => error.type === 'Quotes');
+  if (quoteError) {
+    const location = quoteError.row === undefined ? 'CSV' : `CSV record ${quoteError.row + 1}`;
+    throw new ImportError('MALFORMED_CSV', `${location}: ${quoteError.message}. Correct the quoting and re-import.`);
+  }
+
   const data = result.data.filter((row) => Array.isArray(row));
   // Drop trailing fully-empty records produced by the file's terminating newline(s),
   // so a single trailing "\n" is not counted as a blank data row (matches XLSX, which
@@ -42,7 +48,8 @@ export function parseCsvToGrid(content: string): RawGrid {
       hidden: false,
       formulaColumns: [],
       formulaWithoutValue: [],
-      numericColumns: []
+      numericColumns: [],
+      dateColumns: []
     };
   });
 

@@ -1,8 +1,3 @@
-/**
- * Phase 6: IPC argument validation + write-path authorisation for the export surface.
- * The contract schemas are validated directly (the main-process handler also re-checks
- * them via parseIpcRequest, which cannot be imported here because it pulls in Electron).
- */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { IPC_CHANNELS, IPC_CONTRACTS } from '../../src/shared/contracts';
 import { authorisePath, isAuthorisedPath, clearAuthorisedPaths } from '../../src/main/exportAuth';
@@ -11,15 +6,19 @@ describe('export:write argument validation', () => {
   const schema = IPC_CONTRACTS[IPC_CHANNELS.exportWrite].request;
 
   it('accepts a well-formed request', () => {
-    expect(schema.safeParse({ kind: 'xlsx', destPath: '/tmp/out.xlsx' }).success).toBe(true);
+    expect(schema.safeParse({ kind: 'xlsx', destPath: '/tmp/out.xlsx', runId: 'run-1' }).success).toBe(true);
   });
 
   it('rejects an unknown export kind', () => {
-    expect(schema.safeParse({ kind: 'exe', destPath: '/tmp/out.exe' }).success).toBe(false);
+    expect(schema.safeParse({ kind: 'exe', destPath: '/tmp/out.exe', runId: 'run-1' }).success).toBe(false);
   });
 
   it('rejects a missing destination path', () => {
-    expect(schema.safeParse({ kind: 'csv' }).success).toBe(false);
+    expect(schema.safeParse({ kind: 'csv', runId: 'run-1' }).success).toBe(false);
+  });
+
+  it('rejects a request without an explicit run ID', () => {
+    expect(schema.safeParse({ kind: 'csv', destPath: '/tmp/out.csv' }).success).toBe(false);
   });
 
   it('rejects a non-object payload', () => {

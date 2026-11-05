@@ -32,10 +32,9 @@ function ensureWindow(): BrowserWindow {
 
 function openProjectPath(path: string): void {
   if (!isProjectFile(path)) return;
+  pendingOpenFile = path;
   const win = ensureWindow();
-  if (win.webContents.isLoading()) {
-    pendingOpenFile = path;
-  } else {
+  if (!win.webContents.isLoading()) {
     win.webContents.send(IPC_EVENTS.openFileRequested, path);
   }
 }
@@ -83,6 +82,7 @@ void app.whenReady().then(async () => {
   hardenDefaultSession();
   registerIpcHandlers({
     getWindow: () => mainWindow,
+    refreshRecentProjects: refreshMenu,
     takePendingOpenFile: () => {
       const p = pendingOpenFile;
       pendingOpenFile = null;

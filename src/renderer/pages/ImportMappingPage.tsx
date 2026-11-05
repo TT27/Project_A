@@ -14,8 +14,6 @@ import type { ChosenFile, Workflow } from '../hooks/useWorkflow';
 
 interface ImportMappingPageProps {
   workflow: Workflow;
-  requestId: string;
-  onBothImported: () => void;
 }
 
 const MANDATORY_FIELDS: { key: keyof ColumnMapping; label: string }[] = [
@@ -75,14 +73,12 @@ function SideImporter({
   side,
   file,
   workflow,
-  requestId,
   imported
 }: {
   side: Side;
   file: ChosenFile;
   workflow: Workflow;
-  requestId: string;
-  imported: boolean;
+  imported: string | undefined;
 }) {
   const project = workflow.project;
   const [inspect, setInspect] = useState<InspectResult | null>(null);
@@ -182,11 +178,11 @@ function SideImporter({
     setError(null);
     setStatus('Importing…');
     try {
-      const res = await getApi().imports.run({ requestId: `${requestId}:${side}`, config });
+      const res = await getApi().imports.run({ requestId: crypto.randomUUID(), config });
       if (!res.ok) {
         setError(res.error.message);
       } else {
-        workflow.setImport(side, res.value);
+        workflow.setImport(config.scope.projectId, side, res.value);
         setPreview(null);
         setStatus('Imported.');
       }
@@ -218,7 +214,7 @@ function SideImporter({
           <h2>{title}</h2>
           <div className="text-sm text-secondary selectable">{file.name}</div>
         </div>
-        {imported ? <span className="badge badge-success">Imported</span> : null}
+        {imported ? <span className="badge badge-success">Saved import: {imported}</span> : null}
       </header>
 
       {status ? <div className="text-sm text-secondary">{status}</div> : null}
@@ -322,7 +318,7 @@ function SideImporter({
             <button type="button" className="btn btn-primary" onClick={() => void runImport()} disabled={!mandatoryMapped || busy}>
               {imported ? 'Re-import' : 'Import this file'}
             </button>
-            <button type="button" className="btn" disabled title="Saved mapping profiles arrive with persistence.">
+            <button type="button" className="btn" disabled title="Mapping profiles are unavailable in this version.">
               Save mapping profile
             </button>
           </div>
@@ -394,12 +390,20 @@ function SideImporter({
   );
 }
 
-export function ImportMappingPage({ workflow, requestId, onBothImported }: ImportMappingPageProps) {
-  const { files, imports, bothImported } = workflow;
+export function ImportMappingPage({ workflow }: ImportMappingPageProps) {
+  const { project, files, imports } = workflow;
+  const [fileError, setFileError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (bothImported) onBothImported();
-  }, [bothImported, onBothImported]);
+  async function pickFile(side: Side) {
+    if (!project) return;
+    setFileError(null);
+    try {
+      const picked = await getApi().dialog.pickInputFile({ side });
+      if (picked) workflow.setFile(project.projectId, side, picked);
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : 'Could not select a source file.');
+    }
+  }
 
   return (
     <div className="content-inner">
@@ -407,22 +411,23 @@ export function ImportMappingPage({ workflow, requestId, onBothImported }: Impor
         <h1>Import &amp; mapping</h1>
         <p>Map each file&rsquo;s columns to the reconciliation fields, then import. Nothing leaves this computer.</p>
       </div>
-      {(['statement', 'ledger'] as const).map((side) =>
-        files[side] ? (
-          <SideImporter
-            key={side}
-            side={side}
-            file={files[side]}
-            workflow={workflow}
-            requestId={requestId}
-            imported={Boolean(imports[side])}
-          />
-        ) : (
-          <div className="placeholder-panel" key={side}>
-            No {side} file selected. Return to Setup to choose one.
+      {fileError && <p className="banner banner-danger" role="alert">{fileError}</p>}
+      {(['statement', 'ledger'] as const).map((side) => {
+        const file = files[side];
+        const imported = imports[side]?.fileName;
+        return (
+          <div key={side}>
+            <button type="button" className="btn" onClick={() => void pickFile(side)}>
+              {file || imported ? 'Change' : 'Choose'} {side === 'statement' ? 'supplier statement' : 'AP ledger export'}…
+            </button>
+            {file ? (
+              <SideImporter key={`${project?.projectId}:${file.path}`} side={side} file={file} workflow={workflow} imported={imported} />
+            ) : (
+              <div className="placeholder-panel">{imported ? `Saved import: ${imported}` : `No ${side} file selected.`}</div>
+            )}
           </div>
-        )
-      )}
+        );
+      })}
     </div>
   );
 }

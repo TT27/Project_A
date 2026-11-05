@@ -55,6 +55,7 @@ export function buildHtmlReport(model: ReportModel): string {
   const { setup } = model.project;
   const s = model.summary;
   const exceptions = model.outcomes.filter((o) => EXCEPTION_CATEGORIES.has(o.category));
+  const invalidRows = model.run.settings.invalidRowCount;
 
   const exceptionsBody =
     exceptions.length === 0
@@ -109,6 +110,7 @@ export function buildHtmlReport(model: ReportModel): string {
 <body>
   <h1>Supplier statement reconciliation</h1>
   <p>${escapeHtml(setup.supplierName)} (${escapeHtml(setup.supplierId)}) — as at ${escapeHtml(setup.cutoffDate)}</p>
+  ${invalidRows ? `<p><strong>Incomplete draft.</strong> ${invalidRows} invalid source rows were omitted.</p>` : ''}
 
   <h2>Project</h2>
   <dl>

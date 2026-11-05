@@ -97,7 +97,7 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
       onProgress: makeSubscriber(ipc, IPC_EVENTS.importProgress, ImportProgressSchema)
     },
     reconcile: {
-      run: () => invoke(IPC_CHANNELS.reconcileRun, undefined),
+      run: (request) => invoke(IPC_CHANNELS.reconcileRun, request),
       getRun: (runId) => invoke(IPC_CHANNELS.reconcileGetRun, { runId }),
       listRuns: () => invoke(IPC_CHANNELS.reconcileListRuns, undefined)
     },
@@ -106,9 +106,9 @@ export function createBridge(ipc: IpcRendererLike): StatementDeskApi {
       list: (request) => invoke(IPC_CHANNELS.reviewList, request ?? {})
     },
     exports: {
-      writeXlsx: (destPath) => invoke(IPC_CHANNELS.exportWrite, { kind: 'xlsx', destPath }),
-      writeCsv: (destPath) => invoke(IPC_CHANNELS.exportWrite, { kind: 'csv', destPath }),
-      writeHtml: (destPath) => invoke(IPC_CHANNELS.exportWrite, { kind: 'html', destPath })
+      writeXlsx: (destPath, runId) => invoke(IPC_CHANNELS.exportWrite, { kind: 'xlsx', destPath, runId }),
+      writeCsv: (destPath, runId) => invoke(IPC_CHANNELS.exportWrite, { kind: 'csv', destPath, runId }),
+      writeHtml: (destPath, runId) => invoke(IPC_CHANNELS.exportWrite, { kind: 'html', destPath, runId })
     },
     diagnostics: {
       build: () => invoke(IPC_CHANNELS.diagnosticsBuild, undefined)

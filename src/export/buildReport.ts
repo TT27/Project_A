@@ -11,6 +11,23 @@ export interface BuildReportInput {
 }
 
 export function buildReport({ repo, run, appVersion, generatedAt }: BuildReportInput): ReportModel {
+  const sources = repo.getRunSources(run.runId);
+  const imported: ReportModel['imported'] = { statement: [], ledger: [] };
+  for (const outcome of run.outcomes) {
+    for (const row of outcome.rows) {
+      imported[row.side].push({
+        sourceRow: row.sourceRow,
+        sheetName: row.sheetName,
+        referenceRaw: row.referenceRaw,
+        referenceKey: outcome.referenceKey,
+        documentType: outcome.documentType,
+        documentDate: row.documentDate,
+        outstandingCents: row.outstandingCents
+      });
+    }
+  }
+  imported.statement.sort((a, b) => a.sourceRow - b.sourceRow);
+  imported.ledger.sort((a, b) => a.sourceRow - b.sourceRow);
   return {
     generatedAt: generatedAt ?? new Date().toISOString(),
     engineVersion: run.engineVersion,
@@ -19,10 +36,7 @@ export function buildReport({ repo, run, appVersion, generatedAt }: BuildReportI
     run,
     summary: run.summary,
     outcomes: run.outcomes,
-    sources: repo.getSources(),
-    imported: {
-      statement: repo.getImportedRows('statement'),
-      ledger: repo.getImportedRows('ledger')
-    }
+    sources,
+    imported
   };
 }

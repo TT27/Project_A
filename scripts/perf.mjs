@@ -1,6 +1,5 @@
 /**
- * Performance harness (SPEC Phase 6): generate N rows per side and measure the time
- * taken by the pure reconciliation engine compareOpenItems().
+ * Benchmark the reconciliation engine on generated statement and ledger rows.
  *
  * The engine is TypeScript with relative imports, so we bundle it in-memory with
  * esbuild (already a dependency) and import the bundle as a data: URL — no build step

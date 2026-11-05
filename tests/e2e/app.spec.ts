@@ -1,10 +1,7 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { join } from 'node:path';
 
-/**
- * E2E scaffold: launches the built app (npm run build first) and checks the shell renders.
- * On headless Linux run under xvfb: `xvfb-run -a npm run test:e2e`.
- */
+// On headless Linux, run with `xvfb-run -a npm run test:e2e`.
 let app: ElectronApplication;
 let page: Page;
 
@@ -53,8 +50,7 @@ test('renderer has no Node access and the bridge is narrow', async () => {
   ]);
 });
 
-test('opens the golden sample, reconciles, records a note and persists it across reopen', async () => {
-  // Seed a temp project from the bundled golden samples via the real main process.
+test('reopens the sample project with its results and review note', async () => {
   const created = await page.evaluate(async () => {
     const g = globalThis as unknown as { statementdesk: { app: { openSample: () => Promise<{ ok: boolean; value?: { path: string } }> } } };
     return g.statementdesk.app.openSample();
@@ -62,7 +58,6 @@ test('opens the golden sample, reconciles, records a note and persists it across
   expect(created.ok).toBe(true);
   const projectPath = created.value!.path;
 
-  // Run reconciliation and assert the golden summary.
   const run = await page.evaluate(async () => {
     const g = globalThis as unknown as { statementdesk: { reconcile: { run: () => Promise<{ ok: boolean; value?: { runId: string; summary: { statementTotalCents: number; ledgerTotalCents: number; differenceCents: number; exceptionCount: number }; outcomes: { outcomeKey: string; category: string }[] } }> } } };
     return g.statementdesk.reconcile.run();
@@ -96,4 +91,12 @@ test('opens the golden sample, reconciles, records a note and persists it across
   }, projectPath);
   expect(reviews.ok).toBe(true);
   expect(reviews.value!.some((r) => r.note === 'Persisted note from e2e' && r.reviewer === 'E2E')).toBe(true);
+
+  const workflow = page.getByRole('navigation', { name: 'Workflow' });
+  await workflow.getByRole('button', { name: 'Setup' }).click();
+  await workflow.getByRole('button', { name: 'Home' }).click();
+  await page.getByTitle(projectPath, { exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Results' })).toBeVisible();
+  await expect(page.locator('.toolbar')).toContainText('Sample reconciliation');
+  await expect(page.getByRole('button', { name: 'Validation' })).toBeEnabled();
 });

@@ -21,6 +21,7 @@ export interface ParsedRow {
   formulaColumns: number[];
   formulaWithoutValue: number[];
   numericColumns: number[];
+  dateColumns: number[];
   userExcluded: boolean;
   isEmpty: boolean;
 }
@@ -62,6 +63,7 @@ export function parseRows(input: ParseRowsInput): ParsedSource {
       formulaColumns: [...raw.formulaColumns],
       formulaWithoutValue: [...raw.formulaWithoutValue],
       numericColumns: [...raw.numericColumns],
+      dateColumns: [...raw.dateColumns],
       userExcluded: excluded.has(raw.index),
       isEmpty
     });
