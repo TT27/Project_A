@@ -280,7 +280,7 @@
 .issue-warning { color: var(--color-warning); }
 
 
-/* ---- Phase 5: Export & Feedback pages ---- */
+/* Export and feedback pages */
 .page { padding: var(--space-5, 24px); max-width: 960px; }
 .muted { color: var(--color-text-secondary, #86868b); }
 .export-list { display: flex; flex-direction: column; gap: var(--space-3, 12px); margin-top: var(--space-4, 16px); }

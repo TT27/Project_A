@@ -1,67 +1,42 @@
-# StatementDesk — User Guide
+# Using StatementDesk
 
-StatementDesk reconciles a **supplier statement** against your **accounts payable (AP) ledger export** for a single supplier, as at a chosen cut-off date. Everything runs locally; no data leaves your computer.
+StatementDesk compares one supplier statement with an accounts payable ledger export at the same cut-off date. Your files and results stay on your computer.
 
-## 1. Home
+## Start or open a project
 
-- **Try the sample project** — loads the bundled SUP001 fixture end to end so you can see a full reconciliation without preparing files.
-- **New project** — start a reconciliation from your own files.
-- **Open recent** — reopen a previously saved project (results and review notes are preserved).
+Choose **New reconciliation** and enter the supplier name, supplier ID and cut-off date. Select both source files and confirm that they show outstanding items at the same date. StatementDesk supports AUD. Choose where to save the `.statementdesk` project file.
 
-## 2. Project setup
+On Home, **Try sample** opens an example for supplier SUP001. To resume your own work, choose **Open existing project** or select a project from **Recent local projects**. Saved imports, the latest run and review notes are available when you reopen a project.
 
-Enter the **supplier name/ID**, the **statement cut-off date**, and confirm the currency is **AUD** (the only supported currency in v0.1). A project is created as a local SQLite file you choose the location for.
+## Import both files
 
-## 3. Import and mapping
+1. For an Excel workbook, choose the worksheet. Set the header row and data range if needed.
+2. Map the document reference, type, date and outstanding amount. You can also map supplier, currency and as-of date.
+3. Choose the format for dates stored as text. Choose whether amounts are already signed or the app should apply the sign by document type. Invoices are positive and credit notes are negative.
+4. If you have an independent total from the source, enter it as the control total. Preview the mapping, check any flagged rows, then import the file.
 
-For each side (statement and ledger):
+## Check the totals
 
-1. Choose a **CSV or XLSX** file via the native file dialog.
-2. For XLSX, pick the **sheet** and, if needed, the **header row / data range**.
-3. **Map columns** to the canonical fields: document reference, document date, document type, and amount (plus optional due date). Mapping profiles are remembered per supplier.
-4. Review the **import diagnostics** — row counts, skipped rows and reasons.
+On **Validation**, compare each imported total with the control total and check how many rows were valid, invalid or excluded. A matching control total can still hide offsetting errors.
 
-### Amount conventions
+If rows are invalid, correct the files and re-import them. You can also acknowledge the omissions and run an incomplete draft. Results show the number of invalid rows left out.
 
-- **Invoices are positive**, **credit notes are negative**.
-- All amounts are stored as **signed integer cents** — there is no floating-point currency maths.
+## Review the results
 
-## 4. Validation
+The app groups rows by document type and reference for the selected supplier. An exact match has the same date and amount on both sides. Other groups show amount or date differences, items found on only one side, or possible duplicates. Duplicate groups need review. Use the source row numbers to find the original entries.
 
-StatementDesk shows **control totals** for each side (count and sum of outstanding amounts) and the **difference**. Completeness warnings flag rows that could not be fully normalised. Confirm the totals match your source documents before continuing.
+Open **Review** to record a decision and note for an exception. The project keeps a history of those decisions.
 
-## 5. Reconciliation results
+## Export a run
 
-The deterministic engine applies matching Rules 1–6 and categorises every outcome:
+| Format | What it contains |
+|---|---|
+| Excel workbook | Summary, exceptions, matches, imported rows, exclusion counts and source details |
+| Exceptions CSV | One row per exception in a fixed column order |
+| HTML report | A printable summary and exception list that opens in your browser |
 
-- **Exact match** — reference and amount agree.
-- **Amount mismatch** — same reference, different amount.
-- **Statement-only** — present on the statement, absent from the ledger.
-- **Ledger-only** — present in the ledger, absent from the statement.
-- **Ambiguous / possible duplicate** — multiple candidates; handled conservatively (never auto-matched).
+Exports use the source data recorded for the displayed run. Excel and HTML label incomplete drafts and show how many invalid rows were omitted. The fixed-format CSV is available for runs with no invalid rows. If an older run was saved before the app recorded its sources, open **Validation** and run the reconciliation again before exporting.
 
-Filters and status views let you focus on exceptions. Every row remains traceable to its original source row number.
+## Save feedback locally
 
-## 6. Exception review
-
-For each exception you can record a **review decision** and a **note**. Decisions are stored as append-only review events, so the history is preserved and results survive close/reopen.
-
-## 7. Export
-
-From the **Export** page you can produce:
-
-- **XLSX workbook** — Summary, Exceptions, Matched, ImportedStatement, ImportedLedger, Exclusions, ImportSettings sheets.
-- **Exceptions CSV** — a fixed, documented column set.
-- **Printable HTML report** — self-contained, no scripts, safe to archive or print to PDF from your browser.
-
-You choose the output location through a native save dialog. Financial values are written as numeric cells with two-decimal display; identifiers are written as text and any value starting with `= + - @` is neutralised against spreadsheet formula injection.
-
-Exports use the inputs saved with the displayed run. Excel and HTML reports label incomplete drafts and show how many invalid rows were omitted. The fixed-format CSV is available for runs with no invalid rows. Older runs without source snapshots remain viewable. Run a new reconciliation from Validation to export a report from a migrated project.
-
-## 8. Feedback and diagnostics
-
-An **offline** feedback form captures preparation time, review time, usefulness, problems encountered and likelihood to recommend. The optional diagnostics bundle contains only app version, OS version, row counts and error codes — **no customer data**. You preview everything before it is saved to a file you choose. Nothing is transmitted anywhere.
-
-## Keyboard & accessibility
-
-The interface is keyboard navigable and follows the macOS design language (hidden-inset title bar, light/dark tokens). Failure states are reported accurately rather than hidden.
+Use **Feedback** to record what worked and what got in the way. You can preview and save the form to a local file. Optional diagnostics contain version information, row counts and error codes. Supplier names, references and amounts stay out of the diagnostics.

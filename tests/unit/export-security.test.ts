@@ -1,11 +1,3 @@
-/**
- * Phase 6 security tests for the export layer:
- *  - CSV and XLSX formula injection is neutralised (leading = + - @ prefixed with ').
- *  - HTML injection in untrusted content is escaped (no live <script>, no raw tags).
- *  - The precise "No differences found within the imported data." wording is used.
- *  - The HTML report embeds no <script> and loads no external resources.
- *  - The DB-preserved source value is never mutated (guardText returns a copy).
- */
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
 import {
@@ -139,7 +131,6 @@ describe('XLSX export security', () => {
     // Statement amount cell is a number (13000 cents -> 130), not a string.
     expect(dataRow.getCell(3).value).toBe(130);
     expect(typeof dataRow.getCell(3).value).toBe('number');
-    // All seven mandated sheets exist.
     for (const name of ['Summary', 'Exceptions', 'Matched', 'ImportedStatement', 'ImportedLedger', 'Exclusions', 'ImportSettings']) {
       expect(wb.getWorksheet(name)).toBeDefined();
     }

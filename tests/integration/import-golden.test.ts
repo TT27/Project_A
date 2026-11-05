@@ -1,9 +1,4 @@
-/**
- * End-to-end Phase 3 import: drive the REAL import layer (loadSource -> parseRows ->
- * normaliseRows, with SHA-256 and control totals) over the golden CSV *and* XLSX
- * fixtures, then feed the canonical rows to the domain engine and assert the
- * golden results (section 10). This is the Phase 3 exit test.
- */
+/** Reconcile the SUP001 sample from both CSV and XLSX inputs. */
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { inspectInput, runImport } from '../../src/import';

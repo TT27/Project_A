@@ -53,7 +53,7 @@ describe('IPC request schemas (main-side validation)', () => {
     expect(mainSideParse(IPC_CHANNELS.projectCreate, [{ path: '/p.statementdesk', setup: { ...goodSetup, projectName: '   ' } }]).success).toBe(false);
   });
 
-  it('validates the Phase 4 reconcile/review/settings channels', () => {
+  it('validates reconciliation, review and project settings requests', () => {
     // Reconcile can accept explicit project scope and draft acknowledgement.
     expect(mainSideParse(IPC_CHANNELS.reconcileRun, []).success).toBe(true);
     expect(mainSideParse(IPC_CHANNELS.reconcileRun, [{}]).success).toBe(false);

@@ -1,8 +1,7 @@
 # StatementDesk v0.1.0 (beta)
 
-Local-first desktop application for reconciling a supplier statement against an
-accounts payable ledger export. Primary platform: macOS 13+ (Apple Silicon and Intel).
-Secondary platform: Windows 11 x64.
+StatementDesk compares a supplier statement with an accounts payable ledger export.
+It runs on macOS 13 or later (Apple Silicon and Intel) and targets Windows 11 x64.
 
 Everything is processed locally. There are no accounts, no cloud sync, no telemetry
 and no network activity during import, comparison, review or export.
@@ -21,7 +20,7 @@ npm run test:e2e     # Playwright driving the built Electron app (Linux: xvfb-ru
 npm run build        # electron-vite production build into out/
 npm run dist:mac     # DMG + ZIP for arm64 and x64 into release/
 npm run dist:win     # NSIS installer (secondary target) into release/
-npm run icons        # regenerate placeholder icons from build/icon-source.svg
+npm run icons        # rebuild icons from build/icon-source.svg
 ```
 
 ## Repository layout
@@ -32,26 +31,27 @@ src/preload     Narrow contextBridge API (no generic IPC)
 src/renderer    React UI (components, pages, hooks, styles)
 src/shared      Data contracts: TypeScript types + Zod schemas shared by all layers
 src/domain      Pure financial engine (money, dates, references, reconciliation)
-src/import      CSV / XLSX readers and mapping            (Phase 3)
-src/storage     SQLite persistence and migrations         (Phase 4)
-src/export      XLSX / CSV / HTML report writers          (Phase 5)
+src/import      CSV and XLSX readers and column mapping
+src/storage     SQLite project files and migrations
+src/export      XLSX, CSV and HTML report writers
 tests/          unit, property, integration, e2e
-samples/        Synthetic SUP001 golden fixtures
+samples/        Example statement and ledger for supplier SUP001
 docs/           User-facing documentation
 scripts/        Build helpers (icons, sample workbooks)
 build/          electron-builder resources (icons, entitlements, notarize hook)
 ```
 
-## Signing status
+## Installer builds
 
-No Apple Developer ID or Windows code-signing certificate is configured. Builds are
-**unsigned development builds**. The notarization hook (`build/notarize.cjs`) activates
-automatically when `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` are set.
-Publisher verification is a release blocker for public distribution.
+Run `npm run dist:mac` on macOS or `npm run dist:win` on Windows. The native
+`better-sqlite3` dependency needs a build for the target OS. Installers are written to
+`release/`.
+
+Builds without signing credentials are for development. The macOS notarisation hook
+uses `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`. See the
+[release checklist](docs/RELEASE_CHECKLIST.md) for signing and installation checks.
 
 ## Documentation
-
-See the `docs/` directory:
 
 - [User guide](docs/USER_GUIDE.md)
 - [Supported input formats](docs/SUPPORTED_FORMATS.md)
@@ -61,11 +61,4 @@ See the `docs/` directory:
 - [Test & validation report](docs/TEST_AND_VALIDATION_REPORT.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 - [Third-party notices](docs/THIRD_PARTY_NOTICES.md) · [SBOM](docs/sbom.json)
-- [Implementation report](docs/IMPLEMENTATION_REPORT.md)
-
-## Packaging note
-
-macOS (`npm run dist:mac`, dmg+zip arm64+x64) and Windows (`npm run dist:win`, NSIS x64) installers
-**must be built on their respective target OSes**. The app depends on the native module `better-sqlite3`,
-which `node-gyp` cannot cross-compile from Linux. Builds produced without signing credentials are
-unsigned development builds — publisher verification is a release blocker. See the release checklist.
+- [How StatementDesk works](docs/IMPLEMENTATION_REPORT.md)

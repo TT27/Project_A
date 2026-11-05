@@ -4,7 +4,7 @@
  * Each migration is applied inside a transaction and bumps SQLite's
  * `user_version`. Migrations are append-only and never edited once shipped, so
  * an older project file can always be stepped up to the current schema while
- * preserving its data (QA matrix: "migration preserves data").
+ * preserving its data.
  */
 import type Database from 'better-sqlite3';
 

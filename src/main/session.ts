@@ -1,8 +1,4 @@
-/**
- * In-memory per-process import session: the most recent imported rows for each side
- * of the currently open project. Phase 4 also persists these to the project database;
- * this cache serves the active process between import and reconciliation.
- */
+/** In-memory import results for the open project. */
 import type { Side } from '@domain/models';
 import type { ImportConfig } from '@shared/contracts';
 import type { ImportResult } from '../import/types';

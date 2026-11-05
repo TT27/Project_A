@@ -102,7 +102,6 @@ function handle<C extends ContractChannel>(channel: C, handler: Handler<C>): voi
   ipcMain.handle(channel, async (event, ...rawArgs: unknown[]) => {
     const request = parseIpcRequest(channel, rawArgs);
     const response = await handler(request, event);
-    // Defence in depth: never hand the renderer something that violates the contract.
     const checked = IPC_CONTRACTS[channel].response.safeParse(response);
     if (!checked.success) throw new Error(`Handler for ${channel} produced an invalid response`);
     return checked.data;
@@ -151,9 +150,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     return path ? { path } : null;
   });
 
-  // Test/e2e helper: create a fresh temp project and import the bundled golden
-  // CSV samples into it, so the e2e can drive a full reconcile/review flow without
-  // native dialogs. Reuses the exact same create + import + persist path as production.
+  // Import both sample files before making the temporary project active.
   handle(IPC_CHANNELS.appOpenSample, async () => {
     const selection = ++projectSelection;
     let pendingRepo: ProjectRepository | undefined;
@@ -161,7 +158,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       const samplesDir = join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'samples');
       const projectPath = join(mkdtempSync(join(tmpdir(), 'statementdesk-sample-')), `golden${PROJECT_FILE_EXTENSION}`);
       const repo = ProjectRepository.create(projectPath, {
-        projectName: 'Golden sample',
+        projectName: 'Sample reconciliation',
         supplierName: 'Supplier One',
         supplierId: 'SUP001',
         cutoffDate: '2026-09-30',

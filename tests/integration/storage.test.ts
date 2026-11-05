@@ -1,12 +1,3 @@
-/**
- * Phase 4 persistence exit test. Drives the REAL import layer over the golden CSV
- * fixtures, persists both sides through the SQLite ProjectRepository, runs a
- * reconciliation snapshot, records a review decision, then closes and reopens the
- * .statementdesk file to prove rows, runs and notes survive. Also covers multiple
- * immutable runs, migration-preserves-data, corrupted-file rejection and the
- * single-transaction (no partial rows) guarantee. Runs under Node via N-API
- * better-sqlite3 (ABI-stable prebuild shared with Electron — no rebuild needed).
- */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -65,7 +56,7 @@ function recordFrom(result: ImportResult): ImportRecord {
   };
 }
 
-describe('Phase 4 persistence (SQLite repository)', () => {
+describe('SQLite project storage', () => {
   let dir: string;
   let file: string;
   let statement: ImportResult;

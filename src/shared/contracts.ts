@@ -217,10 +217,7 @@ export const PickExportPathRequestSchema = z.object({
 });
 export type PickExportPathRequest = z.infer<typeof PickExportPathRequestSchema>;
 
-/* The export/feedback/diagnostics schemas that use resultSchema() live after it is
- * defined (see "Phase 5: export, feedback, diagnostics" below). */
-
-/* project:* — Phase 1 defines the surface; Phase 4 fills in persistence. */
+/* Project setup and persistence */
 export const ProjectSetupSchema = z.object({
   projectName: z.string().trim().min(1).max(200),
   supplierName: z.string().trim().min(1).max(200),
@@ -269,7 +266,7 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: ErrorInfo }
 export const ProjectCreateResponseSchema = resultSchema(ProjectSummarySchema);
 export const VoidResultSchema = resultSchema(z.null());
 
-/* ------------------------- Phase 5: export, feedback, diagnostics -------- */
+/* Export, feedback and diagnostics */
 
 export const ExportWriteRequestSchema = z.object({
   kind: ExportKindSchema,
@@ -505,7 +502,7 @@ export type ImportPreviewRequest = z.infer<typeof ImportPreviewRequestSchema>;
 export type ImportRunRequest = z.infer<typeof ImportRunRequestSchema>;
 export type ImportCancelRequest = z.infer<typeof ImportCancelRequestSchema>;
 
-/* ------------------------- Phase 4: settings ----------------------------- */
+/* Project settings */
 
 /** Editable, low-risk project display settings (identity fields stay fixed). */
 export const ProjectSettingsPatchSchema = z
@@ -521,7 +518,7 @@ export type ProjectSettingsPatch = z.infer<typeof ProjectSettingsPatchSchema>;
 export const ProjectSaveSettingsRequestSchema = z.object({ settings: ProjectSettingsPatchSchema });
 export const ProjectSaveSettingsResponseSchema = resultSchema(ProjectSummarySchema);
 
-/* ------------------------- Phase 4: reconciliation views ----------------- */
+/* Reconciliation and review */
 
 export const CountsByCategorySchema = z.object({
   EXACT_MATCH: z.number().int().nonnegative(),

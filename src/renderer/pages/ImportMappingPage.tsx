@@ -318,7 +318,7 @@ function SideImporter({
             <button type="button" className="btn btn-primary" onClick={() => void runImport()} disabled={!mandatoryMapped || busy}>
               {imported ? 'Re-import' : 'Import this file'}
             </button>
-            <button type="button" className="btn" disabled title="Saved mapping profiles arrive with persistence.">
+            <button type="button" className="btn" disabled title="Mapping profiles are unavailable in this version.">
               Save mapping profile
             </button>
           </div>

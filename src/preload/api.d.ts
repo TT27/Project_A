@@ -44,7 +44,7 @@ export interface StatementDeskApi {
     getRecentProjects(): Promise<RecentProject[]>;
     /** A .statementdesk path handed to the app by Finder/Dock before the UI was ready. */
     getPendingOpenFile(): Promise<{ path: string } | null>;
-    /** Test/e2e helper: create a temp project seeded with the bundled golden samples. */
+    /** Open a temporary project using the bundled sample files. */
     openSample(): Promise<Result<ProjectSummary>>;
     onMenuAction(listener: (action: MenuAction) => void): Unsubscribe;
     onOpenFileRequested(listener: (path: string) => void): Unsubscribe;

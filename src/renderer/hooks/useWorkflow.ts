@@ -13,11 +13,6 @@ export interface WorkflowState {
 
 const EMPTY: WorkflowState = { project: null, files: {}, imports: {}, run: null };
 
-/**
- * Central renderer state for the reconciliation workflow. Phase 3 tracks the open
- * project and the most recent import summary for each side; Phase 4 extends it with
- * reconciliation runs and review events.
- */
 export function useWorkflow() {
   const [state, setState] = useState<WorkflowState>(EMPTY);
 

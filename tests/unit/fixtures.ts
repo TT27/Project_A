@@ -1,7 +1,4 @@
-/**
- * Test-only helpers: load the golden CSV fixtures into CanonicalRows using the
- * domain parsers (no import layer yet — Phase 3 replaces this with the real reader).
- */
+/** Load sample rows with the domain parsers for tests that bypass file import. */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CanonicalRow, DocumentType, Side } from '../../src/domain/models';

@@ -1,8 +1,3 @@
-/**
- * Phase 6: IPC argument validation + write-path authorisation for the export surface.
- * The contract schemas are validated directly (the main-process handler also re-checks
- * them via parseIpcRequest, which cannot be imported here because it pulls in Electron).
- */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { IPC_CHANNELS, IPC_CONTRACTS } from '../../src/shared/contracts';
 import { authorisePath, isAuthorisedPath, clearAuthorisedPaths } from '../../src/main/exportAuth';
